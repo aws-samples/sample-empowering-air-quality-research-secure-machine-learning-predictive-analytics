@@ -1,0 +1,13 @@
+.venv/
+lambda_layer/
+.env
+infra/.env
+__pycache__
+.pytest_cache
+infra/data/*
+!infra/data/.gitkeep
+
+# CDK asset staging directory
+.cdk.staging
+infra/cdk.out/*
+infra/cdk.context.json

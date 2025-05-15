@@ -1,0 +1,3 @@
+[defaults]
+canvas_model_endpoint_name = canvas-demo-deployment
+
