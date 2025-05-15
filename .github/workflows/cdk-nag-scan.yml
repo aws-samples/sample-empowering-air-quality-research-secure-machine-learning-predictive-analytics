@@ -1,0 +1,72 @@
+name: CDK Nag Scan
+
+on:
+  push:
+    # only trigger on branches, not on tags
+    branches: 
+      - '**'
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+      inputs:
+        name:
+          description: "test"
+          default: "test"
+
+jobs:
+  cdk-nag-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone the repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          cd infra
+          pip install -r requirements.txt
+          pip install cdk-nag
+      
+      - name: Run CDK Nag
+        run: |
+          cd infra
+          # Extract stack name from pre-deployment-config.ini if it exists
+          if [ -f "scripts/pre-deployment-config.ini" ]; then
+            STACK_NAME=$(python -c "
+              import configparser
+              config = configparser.ConfigParser()
+              config.read('scripts/pre-deployment-config.ini')
+              prefix = config['defaults']['project_prefix'] if 'defaults' in config and 'project_prefix' in config['defaults'] else 'demoapp'
+              print(prefix.capitalize() + 'Stack')
+            " 2>/dev/null)
+            
+            if [ -z "$STACK_NAME" ]; then
+              STACK_NAME="DemoappStack"
+            fi
+          else
+            STACK_NAME="DemoappStack"
+          fi
+          
+          echo "Running CDK Nag on stack: $STACK_NAME"
+          
+          # Run cdk synth with CDK_NAG=true to enable nag checks
+          CDK_NAG=true npx cdk synth "$STACK_NAME" || exit 1
+          
+          # Check if there are any warnings in the output
+          if grep -q "CDK-NAG-WARNING" cdk.out/manifest.json; then
+            echo "CDK Nag found warnings in the stack"
+            grep -A 5 "CDK-NAG-WARNING" cdk.out/manifest.json
+            exit 1
+          else
+            echo "No CDK Nag warnings found"
+          fi
