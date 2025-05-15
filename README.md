@@ -1,4 +1,3 @@
-```markdown
 # ANYCompany Air Quality Monitoring System
 
 ## Overview
