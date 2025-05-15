@@ -36,10 +36,7 @@ find_project_root() {
 }
 
 # Find project root and navigate to it
-PROJECT_ROOT=$(find_project_root)
-if [[ $? -ne 0 ]]; then
-    exit 1
-fi
+PROJECT_ROOT=$(find_project_root) || exit 1
 
 echo "Project root identified at: $PROJECT_ROOT"
 cd "$PROJECT_ROOT"

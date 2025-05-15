@@ -32,10 +32,7 @@ find_project_root() {
 }
 
 # Find project root and navigate to it
-PROJECT_ROOT=$(find_project_root)
-if [[ $? -ne 0 ]]; then
-    exit 1
-fi
+PROJECT_ROOT=$(find_project_root) || exit 1
 
 echo "Project root identified at: $PROJECT_ROOT"
 cd "$PROJECT_ROOT"
@@ -45,6 +42,7 @@ if [ ! -d ".venv" ]; then
     echo "Creating virtual environment"
     python3 -m venv .venv
 fi
+# shellcheck disable=SC1091
 source .venv/bin/activate
 
 # Install requirements
@@ -58,16 +56,14 @@ sh ./bin/prepare_layer_packages.sh
 # Run pre-deployment configuration
 echo "Running pre-deployment configuration"
 pushd infra/scripts
-python3 config.py --pre
-if [ $? -ne 0 ]; then
+if ! python3 config.py --pre; then
     echo "Error: pre-deployment config.py failed"
     exit 1
 fi
 
 # Run post-deployment configuration
 echo "Running post-deployment configuration"
-python3 config.py --post
-if [ $? -ne 0 ]; then
+if ! python3 config.py --post; then
     echo "Error: post-deployment config.py failed"
     exit 1
 fi
