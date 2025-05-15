@@ -24,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'
       
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -37,25 +37,36 @@ jobs:
           pip install -r requirements.txt
           pip install cdk-nag
       
+      - name: Create configuration files
+        run: |
+          cd infra
+          # Create pre-deployment config file
+          mkdir -p scripts
+          cat > scripts/pre-deployment-config.ini << EOL
+          [defaults]
+          initial_data_file = init_data.csv
+          project_prefix = demoapp
+          EOL
+          
+          # Create post-deployment config file
+          cat > scripts/post-deployment-config.ini << EOL
+          [defaults]
+          canvas_model_endpoint_name = canvas-demo-deployment
+          EOL
+          
+          echo "Created configuration files"
+      
       - name: Run CDK Nag
         run: |
           cd infra
-          # Extract stack name from pre-deployment-config.ini if it exists
-          if [ -f "scripts/pre-deployment-config.ini" ]; then
-            STACK_NAME=$(python -c "
-              import configparser
-              config = configparser.ConfigParser()
-              config.read('scripts/pre-deployment-config.ini')
-              prefix = config['defaults']['project_prefix'] if 'defaults' in config and 'project_prefix' in config['defaults'] else 'demoapp'
-              print(prefix.capitalize() + 'Stack')
-            " 2>/dev/null)
-            
-            if [ -z "$STACK_NAME" ]; then
-              STACK_NAME="DemoappStack"
-            fi
-          else
-            STACK_NAME="DemoappStack"
-          fi
+          # Extract stack name from pre-deployment-config.ini
+          STACK_NAME=$(python -c "
+            import configparser
+            config = configparser.ConfigParser()
+            config.read('scripts/pre-deployment-config.ini')
+            prefix = config['defaults']['project_prefix'] if 'defaults' in config and 'project_prefix' in config['defaults'] else 'demoapp'
+            print(prefix.capitalize() + 'Stack')
+          ")
           
           echo "Running CDK Nag on stack: $STACK_NAME"
           
