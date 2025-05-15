@@ -60,13 +60,7 @@ jobs:
         run: |
           cd infra
           # Extract stack name from pre-deployment-config.ini
-          STACK_NAME=$(python -c "
-            import configparser
-            config = configparser.ConfigParser()
-            config.read('scripts/pre-deployment-config.ini')
-            prefix = config['defaults']['project_prefix'] if 'defaults' in config and 'project_prefix' in config['defaults'] else 'demoapp'
-            print(prefix.capitalize() + 'Stack')
-          ")
+          STACK_NAME=$(python3 -c 'import configparser; config = configparser.ConfigParser(); config.read("scripts/pre-deployment-config.ini"); prefix = config["defaults"]["project_prefix"] if "defaults" in config and "project_prefix" in config["defaults"] else "demoapp"; print(prefix.capitalize() + "Stack")')
           
           echo "Running CDK Nag on stack: $STACK_NAME"
           
