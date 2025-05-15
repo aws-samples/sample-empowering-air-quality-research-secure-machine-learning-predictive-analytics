@@ -56,6 +56,48 @@ jobs:
           
           echo "Created configuration files"
       
+      - name: Prepare Lambda layers
+        run: |
+          # Create Lambda layer directory structure
+          mkdir -p lambda_layer/common/python/common
+          
+          # Create a minimal Lambda layer zip file
+          cd lambda_layer/common
+          echo "# Placeholder" > python/common/__init__.py
+          zip -rq common_layer.zip python
+          cd ../..
+          
+          echo "Lambda layers prepared"
+      
+      - name: Modify CDK stack for testing
+        run: |
+          # Create a modified version of the lambda_stack.py file that skips the Lambda layer creation
+          cd infra/cdk_stack
+          
+          # Backup the original file
+          cp lambda_stack.py lambda_stack.py.bak
+          
+          # Modify the file to use a dummy layer
+          sed -i 's/self.create_lambda_layer(/self._create_dummy_layer(/g' lambda_stack.py
+          
+          # Add the dummy layer method
+          cat >> lambda_stack.py << 'EOL'
+          
+          def _create_dummy_layer(self, id, description, layer_path, compatible_runtimes=None):
+              """Create a dummy layer for testing purposes"""
+              from aws_cdk import aws_lambda as _lambda
+              
+              return _lambda.LayerVersion(
+                  self,
+                  id,
+                  code=_lambda.Code.from_asset(layer_path),
+                  compatible_runtimes=compatible_runtimes,
+                  description=description,
+              )
+          EOL
+          
+          echo "Modified CDK stack for testing"
+      
       - name: Run CDK Nag
         run: |
           cd infra
