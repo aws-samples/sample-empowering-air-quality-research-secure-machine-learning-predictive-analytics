@@ -1,35 +1,6 @@
 # Air Quality Monitoring System Architecture
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                        Air Quality Monitoring System               │
-│                                                                    │
-│  ┌──────────────┐    ┌───────────────┐    ┌────────────────────┐   │
-│  │              │    │   EventBridge │    │   Step Functions   |   │
-│  │ Air Quality  │    │   Scheduler   │──▶│   State Machine     │   │
-│  │   Sensors    │    │               │    │                    │   │
-│  │              │    └───────────────┘    └────────────┬───────┘   │
-│  └──────┬───────┘                                      │           │
-│         │                                              ▼           │
-│         │                                   ┌────────────────────┐ │
-│         ▼                                   │                    │ │
-│  ┌──────────────┐                           │   Lambda Functions │ │
-│  │              │      ┌───────────────┐    │   - Data Processing│ │
-│  │     S3       │      │   SageMaker   │    │   - DB Operations  │ │
-│  │   Bucket     │─────▶│   Endpoint    │◀───│   - ML Inference   │ │
-│  │              │      │               │    │                    │ │
-│  └──────────────┘      └───────────────┘    └────────┬───────────┘ │
-│         ▲                      │                      │            │
-│         │                      │                      │            │
-│         │                      ▼                      ▼            │
-│  ┌──────────────────────────────────────────────────────────-┐     │
-│  │                      Amazon RDS                           │     │
-│  │                   PostgreSQL Database                     │     │
-│  │                                                           │     │
-│  └──────────────────────────────────────────────────────────-┘     │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-```
+![Air Quality Monitoring System Architecture](Architecture.png)
 
 ## Component Details
 
