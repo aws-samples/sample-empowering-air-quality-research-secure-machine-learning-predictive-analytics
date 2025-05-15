@@ -1,0 +1,34 @@
+
+name: Python Quality Check
+
+on:
+  push:
+    # only trigger on branches, not on tags
+    branches: 
+      - '**'
+  pull_request:
+    branches:
+      - '*'
+  workflow_dispatch:
+      inputs:
+        name:
+          description: "test"
+          default: "test"
+          
+jobs:
+
+  pylint-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone the repository
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install packages
+        run: |
+          pip install pylint urllib3 boto3 bandit
+      - name: Pylint all
+        run: |
+          python utils/pylint.py
