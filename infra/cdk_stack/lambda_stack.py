@@ -191,7 +191,7 @@ class LambdaStack(NestedStack):
         )
 
         # Create Lambda layers
-        common_shared_layer = self.create_lambda_layer(
+        common_shared_layer = self._create_dummy_layer(
             "common_shared_layer", "../lambda_layer/common/common_layer.zip"
         )
         pandas_layer = self.create_pandas_layer()
@@ -387,7 +387,7 @@ class LambdaStack(NestedStack):
             role=role,
         )
 
-    def create_lambda_layer(self, id, asset_path):
+    def _create_dummy_layer(self, id, asset_path):
         return _lambda.LayerVersion(
             self,
             id,
