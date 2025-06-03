@@ -13,30 +13,37 @@ INITIAL_DATA_PREFIX = get_env("INITIAL_DATA_PREFIX", "initial_dataset")
 SOURCE_BUCKET = get_env("SOURCE_BUCKET")
 READER_ROLE_NAME = get_env("READER_ROLE_NAME")
 WRITER_ROLE_NAME = get_env("WRITER_ROLE_NAME")
-DB_NAME = get_env("DB_NAME", "demodb")
+DB_NAME = get_env("DB_NAME")
 INITIAL_DATA_FILE = get_env("INITIAL_DATA_FILE", "init_data.csv")
 
 logger = get_logger(service=SERVICE_NAME, level=LOG_LEVEL)
 
+# Log all environment variables at startup for debugging
+logger.info(f"Environment variables: DB_TABLE={DB_TABLE}, DB_NAME={DB_NAME}, "
+            f"READER_ROLE_NAME={READER_ROLE_NAME}, WRITER_ROLE_NAME={WRITER_ROLE_NAME}, "
+            f"SOURCE_BUCKET={SOURCE_BUCKET}, INITIAL_DATA_PREFIX={INITIAL_DATA_PREFIX}, "
+            f"INITIAL_DATA_FILE={INITIAL_DATA_FILE}")
 
 def get_csv_from_s3(bucket, key):
     try:
+        logger.info(f"Attempting to read CSV from S3: {bucket}/{key}")
         csv_data = S3Helper.read_from_s3(bucket, key)
         csv_file = io.StringIO(csv_data)
         reader = csv.DictReader(csv_file)
         columns = reader.fieldnames
         data = list(reader)
+        logger.info(f"Successfully read CSV with {len(data)} rows and columns: {columns}")
         return columns, data
     except Exception as e:
         logger.error(f"Error reading CSV file from S3: {str(e)}")
         raise
 
-
 def check_database_exists(conn, dbname):
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (dbname,))
-        return cur.fetchone() is not None
-
+        exists = cur.fetchone() is not None
+        logger.info(f"Database '{dbname}' exists: {exists}")
+        return exists
 
 def check_table_exists(conn, table_name):
     with conn.cursor() as cur:
@@ -49,14 +56,14 @@ def check_table_exists(conn, table_name):
         """,
             (table_name,),
         )
-        return cur.fetchone()[0]
-
+        exists = cur.fetchone()[0]
+        logger.info(f"Table '{table_name}' exists: {exists}")
+        return exists
 
 def create_database(conn, dbname):
     with conn.cursor() as cur:
         cur.execute("CREATE DATABASE %s", (psycopg2.extensions.AsIs(dbname),))
         logger.info(f"Database '{dbname}' created successfully")
-
 
 def create_table_dynamically(conn, table_name, columns):
     try:
@@ -67,7 +74,7 @@ def create_table_dynamically(conn, table_name, columns):
         # Check if table already exists
         inspector = inspect(engine)
         if table_name in inspector.get_table_names():
-            logger.info(f"Table '{table_name}' already exists")
+            logger.info(f"Table '{table_name}' already exists according to SQLAlchemy inspector")
             return
         
         # Define table columns programmatically
@@ -98,25 +105,31 @@ def create_table_dynamically(conn, table_name, columns):
         table = Table(table_name, metadata, *table_columns)
         
         # Create the table in the database
-        logger.info(f"Creating table: {table_name}")
+        logger.info(f"Creating table: {table_name} with columns: {[c.name for c in table_columns]}")
         metadata.create_all(engine, tables=[table])
         
-        logger.info(
-            f"Table '{table_name}' created successfully with columns: {columns}"
-        )
+        # Verify table was created
+        with conn.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (table_name,))
+            table_created = cur.fetchone()[0]
+            logger.info(f"Table '{table_name}' creation verification: {table_created}")
+            
+            if table_created:
+                # Get column information
+                cur.execute("""
+                    SELECT column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = %s
+                    ORDER BY ordinal_position
+                """, (table_name,))
+                columns_info = cur.fetchall()
+                logger.info(f"Table '{table_name}' columns: {columns_info}")
+        
+        logger.info(f"Table '{table_name}' created successfully")
+        return True
     except Exception as e:
         logger.error(f"Error creating table: {str(e)}")
         raise
-    except Exception as e:
-        logger.error(f"Error creating table: {str(e)}")
-        raise
-    except Exception as e:
-        logger.error(f"Error creating table: {str(e)}")
-        raise
-    except Exception as e:
-        logger.error(f"Error creating table: {str(e)}")
-        raise
-
 
 def insert_data_dynamically(conn, table_name, columns, data):
     try:
@@ -137,11 +150,21 @@ def insert_data_dynamically(conn, table_name, columns, data):
             
             # Construct a safe parameterized query
             insert_sql = f"INSERT INTO {quoted_table} ({column_names}) VALUES ({placeholders})"
+            logger.info(f"Insert SQL: {insert_sql} (showing query structure only, not values)")
             
-            # Prepare batch of records
+            # Prepare batch of records with proper type conversion
             batch_records = []
             for row in data:
-                record = [row[col] for col in columns]
+                record = []
+                for col in columns:
+                    # Handle empty strings for numeric columns
+                    if col.lower() == 'value' and (row[col] == '' or row[col] is None):
+                        record.append(None)  # Use NULL instead of empty string
+                    elif any(num in col.lower() for num in ["amount", "price", "value", "pm25", "pm10"]) and (row[col] == '' or row[col] is None):
+                        record.append(None)  # Use NULL for any numeric column with empty value
+                    else:
+                        record.append(row[col])
+                        
                 record.append(False)  # Add predicted_label value as False
                 batch_records.append(tuple(record))
             
@@ -151,6 +174,11 @@ def insert_data_dynamically(conn, table_name, columns, data):
             logger.info(
                 f"Successfully inserted {len(batch_records)} records into {table_name}"
             )
+            
+            # Verify data was inserted
+            cur.execute(f'SELECT COUNT(*) FROM "{table_name}"')
+            count = cur.fetchone()[0]
+            logger.info(f"Total records in {table_name} after insert: {count}")
     except Exception as e:
         logger.error(f"Error inserting data: {str(e)}")
         conn.rollback()
@@ -165,106 +193,160 @@ def create_db_users(conn, reader_role_name, writer_role_name):
             if not cur.fetchone():
                 cur.execute("CREATE USER reader_user")
                 logger.info("Reader user created successfully")
-
-            # Use parameterized queries for database name
-            cur.execute(
-                """
-                GRANT rds_iam TO reader_user;
-                GRANT CONNECT ON DATABASE %s TO reader_user;
-                GRANT USAGE ON SCHEMA public TO reader_user;
-                GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader_user;
-                GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO reader_user;
-            """,
-                (psycopg2.extensions.AsIs(f'"{DB_NAME}"'),)
-            )
+            else:
+                logger.info("Reader user already exists")
 
             # Create and configure writer_user
             cur.execute("SELECT 1 FROM pg_roles WHERE rolname='writer_user'")
             if not cur.fetchone():
                 cur.execute("CREATE USER writer_user")
                 logger.info("Writer user created successfully")
+            else:
+                logger.info("Writer user already exists")
 
-            # Use parameterized queries for database name
+            # Grant basic permissions to database
+            cur.execute(
+                """
+                GRANT rds_iam TO reader_user;
+                GRANT CONNECT ON DATABASE %s TO reader_user;
+                GRANT USAGE ON SCHEMA public TO reader_user;
+                """,
+                (psycopg2.extensions.AsIs(DB_NAME),)
+            )
+            
             cur.execute(
                 """
                 GRANT rds_iam TO writer_user;
                 GRANT CONNECT ON DATABASE %s TO writer_user;
                 GRANT USAGE ON SCHEMA public TO writer_user;
+                """,
+                (psycopg2.extensions.AsIs(DB_NAME),)
+            )
+            logger.info("Granted basic database permissions to users")
+
+            # Grant permissions on existing tables and sequences
+            cur.execute(
+                """
+                GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader_user;
+                GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO reader_user;
+                """
+            )
+            
+            cur.execute(
+                """
                 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writer_user;
                 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO writer_user;
-            """,
-                (psycopg2.extensions.AsIs(f'"{DB_NAME}"'),)
+                """
             )
+            logger.info("Granted permissions on existing tables and sequences")
+
+            # Set default privileges for future objects
+            cur.execute(
+                """
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+                GRANT SELECT ON TABLES TO reader_user;
+                
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+                GRANT SELECT ON SEQUENCES TO reader_user;
+                """
+            )
+            
+            cur.execute(
+                """
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+                GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO writer_user;
+                
+                ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+                GRANT USAGE ON SEQUENCES TO writer_user;
+                """
+            )
+            logger.info("Set default privileges for future objects")
 
             # Associate IAM roles with DB users
             for role_name, base_user in [
                 (reader_role_name, "reader_user"),
                 (writer_role_name, "writer_user"),
             ]:
-                # Check if role exists using quoted identifier
+                # Check if role exists
                 cur.execute(
                     "SELECT 1 FROM pg_roles WHERE rolname=%s", 
                     (role_name,)
                 )
+                
                 if not cur.fetchone():
                     # Create the role with proper quoting
                     cur.execute(
                         'CREATE USER "%s" WITH LOGIN',
                         (psycopg2.extensions.AsIs(role_name),)
                     )
-                    
-                    # Grant permissions with proper quoting
-                    cur.execute(
-                        'GRANT rds_iam TO "%s"',
-                        (psycopg2.extensions.AsIs(role_name),)
-                    )
-                    
-                    cur.execute(
-                        'GRANT %s TO "%s"',
-                        (
-                            psycopg2.extensions.AsIs(base_user),
-                            psycopg2.extensions.AsIs(role_name),
-                        )
-                    )
-                    
-                    logger.info(
-                        f"IAM role {role_name} associated with DB user successfully"
-                    )
-                    
-            # Explicitly grant permissions on the specific table
-            # This is important to ensure the roles have access to tables created after the roles
-            cur.execute(
-                "GRANT SELECT ON TABLE public.%s TO reader_user, writer_user",
-                (psycopg2.extensions.AsIs(f'"{DB_TABLE}"'),)
-            )
-            cur.execute(
-                "GRANT INSERT, UPDATE, DELETE ON TABLE public.%s TO writer_user",
-                (psycopg2.extensions.AsIs(f'"{DB_TABLE}"'),)
-            )
-            
-            # Also grant permissions to the IAM roles directly to ensure access
-            cur.execute(
-                "GRANT SELECT ON TABLE public.%s TO %s, %s",
-                (
-                    psycopg2.extensions.AsIs(f'"{DB_TABLE}"'),
-                    psycopg2.extensions.AsIs(f'"{reader_role_name}"'),
-                    psycopg2.extensions.AsIs(f'"{writer_role_name}"')
+                    logger.info(f"Created IAM role {role_name}")
+                else:
+                    logger.info(f"IAM role {role_name} already exists")
+                
+                # Grant permissions with proper quoting
+                cur.execute(
+                    'GRANT rds_iam TO "%s"',
+                    (psycopg2.extensions.AsIs(role_name),)
                 )
-            )
-            cur.execute(
-                "GRANT INSERT, UPDATE, DELETE ON TABLE public.%s TO %s",
-                (
-                    psycopg2.extensions.AsIs(f'"{DB_TABLE}"'),
-                    psycopg2.extensions.AsIs(f'"{writer_role_name}"')
+                
+                cur.execute(
+                    'GRANT %s TO "%s"',
+                    (
+                        psycopg2.extensions.AsIs(base_user),
+                        psycopg2.extensions.AsIs(role_name),
+                    )
                 )
-            )
+                logger.info(f"IAM role {role_name} associated with {base_user}")
             
-            logger.info(f"Explicitly granted permissions on table {DB_TABLE}")
+            # Explicitly grant permissions on the specific table if it exists
+            # This is important to ensure the roles have access to the table
+            if check_table_exists(conn, DB_TABLE):
+                # Grant to base users
+                cur.execute(
+                    'GRANT SELECT ON TABLE public."%s" TO reader_user, writer_user',
+                    (psycopg2.extensions.AsIs(DB_TABLE),)
+                )
+                cur.execute(
+                    'GRANT INSERT, UPDATE, DELETE ON TABLE public."%s" TO writer_user',
+                    (psycopg2.extensions.AsIs(DB_TABLE),)
+                )
+                
+                # Grant to IAM roles directly
+                cur.execute(
+                    'GRANT SELECT ON TABLE public."%s" TO "%s", "%s"',
+                    (
+                        psycopg2.extensions.AsIs(DB_TABLE),
+                        psycopg2.extensions.AsIs(reader_role_name),
+                        psycopg2.extensions.AsIs(writer_role_name)
+                    )
+                )
+                cur.execute(
+                    'GRANT INSERT, UPDATE, DELETE ON TABLE public."%s" TO "%s"',
+                    (
+                        psycopg2.extensions.AsIs(DB_TABLE),
+                        psycopg2.extensions.AsIs(writer_role_name)
+                    )
+                )
+                logger.info(f"Explicitly granted permissions on table {DB_TABLE}")
+            else:
+                logger.warning(f"Table {DB_TABLE} does not exist yet, skipping explicit grants")
+            
+            # Verify permissions were granted correctly
+            cur.execute(
+                """
+                SELECT grantee, table_name, privilege_type
+                FROM information_schema.table_privileges
+                WHERE table_name = %s
+                ORDER BY grantee, privilege_type
+                """,
+                (DB_TABLE,)
+            )
+            permissions = cur.fetchall()
+            logger.info(f"Current permissions on {DB_TABLE}: {permissions}")
 
     except Exception as e:
         logger.error(f"Error creating DB users: {str(e)}")
         raise
-
 
 def lambda_handler(event, context):
     try:
@@ -292,16 +374,59 @@ def lambda_handler(event, context):
             conn = RDSHelper.get_connection_with_secret(DB_SECRET_NAME, DB_NAME)
             conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 
-            create_db_users(conn, READER_ROLE_NAME, WRITER_ROLE_NAME)
+            # List all tables in the database for debugging
+            with conn.cursor() as cur:
+                cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+                tables = cur.fetchall()
+                logger.info(f"Tables in database before initialization: {tables}")
 
+            # First get the data and create the table
             columns, csv_data = get_csv_from_s3(SOURCE_BUCKET, s3_key)
 
             if not check_table_exists(conn, DB_TABLE):
-                create_table_dynamically(conn, DB_TABLE, columns)
+                table_created = create_table_dynamically(conn, DB_TABLE, columns)
+                if not table_created:
+                    logger.error(f"Failed to create table {DB_TABLE}")
+                    # Try a direct SQL approach as fallback
+                    with conn.cursor() as cur:
+                        # Create a simple table with value and predicted_label columns
+                        cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS "{DB_TABLE}" (
+                                id SERIAL PRIMARY KEY,
+                                value INTEGER,
+                                predicted_label BOOLEAN DEFAULT FALSE
+                            )
+                        """)
+                        logger.info(f"Attempted fallback table creation for {DB_TABLE}")
             else:
                 logger.info(f"Table '{DB_TABLE}' already exists")
 
+            # Insert data
             insert_data_dynamically(conn, DB_TABLE, columns, csv_data)
+            
+            # Now create users and grant permissions AFTER the table exists
+            create_db_users(conn, READER_ROLE_NAME, WRITER_ROLE_NAME)
+
+            # Final verification
+            with conn.cursor() as cur:
+                cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+                tables = cur.fetchall()
+                logger.info(f"Tables in database after initialization: {tables}")
+                
+                # Check specifically for our table
+                cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = %s)", (DB_TABLE,))
+                table_exists = cur.fetchone()[0]
+                logger.info(f"Final verification - Table {DB_TABLE} exists: {table_exists}")
+                
+                if table_exists:
+                    # Check permissions
+                    cur.execute("""
+                        SELECT grantee, privilege_type
+                        FROM information_schema.table_privileges
+                        WHERE table_name = %s
+                    """, (DB_TABLE,))
+                    permissions = cur.fetchall()
+                    logger.info(f"Final verification - Permissions on {DB_TABLE}: {permissions}")
 
             return {
                 "statusCode": 200,
