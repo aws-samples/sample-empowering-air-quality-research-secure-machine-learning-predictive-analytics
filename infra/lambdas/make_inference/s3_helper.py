@@ -30,14 +30,32 @@ class S3Helper:
         return df
 
     @staticmethod
-    def save_csv_to_s3(df, bucket_name, file_key, aws_region=None):
+    def save_csv_to_s3(df, bucket_name, file_key, include_header=True, aws_region=None, date_format=None):
         """
         Save DataFrame as CSV to S3 bucket
+        include_header (bool): Whether to include column headers
         """
         csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
+        df.to_csv(csv_buffer, index=False, header=include_header, date_format=date_format)
+        csv_buffer.seek(0)
         s3_client = AwsHelper.get_client("s3", aws_region)
         s3_client.put_object(
             Bucket=bucket_name, Key=file_key, Body=csv_buffer.getvalue()
         )
+        
         logger.info(f"Successfully saved to s3://{bucket_name}/{file_key}")
+
+    @staticmethod
+    def list_s3_files(bucket, prefix):
+        """List files in an S3 bucket with the given prefix"""
+        s3_client = boto3.client('s3')
+        response = s3_client.list_objects_v2(
+            Bucket=bucket,
+            Prefix=prefix
+        )
+        
+        files = []
+        for item in response.get('Contents', []):
+            files.append(item['Key'])
+        
+        return files
