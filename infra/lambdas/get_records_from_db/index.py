@@ -15,12 +15,14 @@ READER_ROLE_NAME = get_env("READER_ROLE_NAME")
 DB_HOST = get_env("DB_HOST")
 DB_NAME = get_env("DB_NAME")
 RDS_DB_PORT = int(get_env("RDS_DB_PORT", "5432"))
+AQ_PARAMETER_PREDICTION = get_env("AQ_PARAMETER_PREDICTION", "PM 2.5")
 
 logger = get_logger(service=SERVICE_NAME, level=LOG_LEVEL)
 
 
 def lambda_handler(event, context):
     logger.info("Starting lambda execution")
+    logger.info(f"Filtering for air quality parameter: {AQ_PARAMETER_PREDICTION}")
     try:
         # Set up RDS configuration for IAM authentication
         rds_config = {
@@ -66,17 +68,24 @@ def lambda_handler(event, context):
             logger.info(f"Found time column: {time_column}")
             
             # Use AT TIME ZONE to ensure proper timezone comparison
+            # Filter by parameter field and predicted_label = false
             query = f'''
                 SELECT * FROM "{DB_TABLE}" 
                 WHERE value = %s 
+                AND parameter = %s
                 AND predicted_label = false 
                 AND {time_column} AT TIME ZONE 'UTC' >= %s::timestamptz
             '''
-            db_params = (65535, timestamp_str)
+            db_params = (65535, AQ_PARAMETER_PREDICTION, timestamp_str)
         else:
             logger.info("No time column found, querying without time constraint")
-            query = f'SELECT * FROM "{DB_TABLE}" WHERE value = %s AND predicted_label = false'
-            db_params = (65535,)
+            query = f'''
+                SELECT * FROM "{DB_TABLE}" 
+                WHERE value = %s 
+                AND parameter = %s
+                AND predicted_label = false
+            '''
+            db_params = (65535, AQ_PARAMETER_PREDICTION)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"{RETRIEVAL_PREFIX}/query_results_{timestamp}.csv"
@@ -92,7 +101,7 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 204,  # Changed from 200 to 204 (No Content)
                 "body": {
-                    "message": "No records found in the last 24 hours with value 65535",
+                    "message": f"No records found in the last 24 hours with value 65535 and parameter '{AQ_PARAMETER_PREDICTION}'",
                     "records": 0,
                     "file_name": None,
                 },
@@ -112,7 +121,7 @@ def lambda_handler(event, context):
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
                 "body": {
-                    "message": f"Query executed successfully. Found {len(records)} records from the last 24 hours with value 65535",
+                    "message": f"Query executed successfully. Found {len(records)} records from the last 24 hours with value 65535 and parameter '{AQ_PARAMETER_PREDICTION}'",
                     "records": len(records),
                     "file_name": file_name,
                 },

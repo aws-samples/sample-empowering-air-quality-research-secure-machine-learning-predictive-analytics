@@ -106,6 +106,24 @@ class NetworkStack(NestedStack):
             security_groups=[self.secrets_manager_sg],
         )
 
+        # Add SSM VPC Endpoint for Parameter Store access
+        self.ssm_endpoint = self.vpc.add_interface_endpoint(
+            f"{project_prefix}SSMEndpoint",
+            service=ec2.InterfaceVpcEndpointAwsService.SSM,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            security_groups=[self.lambda_sg],
+        )
+
+        # Add Step Functions VPC Endpoint for task callbacks
+        self.step_functions_endpoint = self.vpc.add_interface_endpoint(
+            f"{project_prefix}StepFunctionsEndpoint",
+            service=ec2.InterfaceVpcEndpointAwsService.STEP_FUNCTIONS,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            security_groups=[self.lambda_sg],
+        )
+
         # Get database configuration from config
         rds_db_port = int(config.get("rds_db_port", 5432))
 

@@ -59,3 +59,38 @@ class S3Helper:
             files.append(item['Key'])
         
         return files
+
+    @staticmethod
+    def save_json_to_s3(data, bucket_name, file_key, aws_region=None):
+        """
+        Save JSON data to S3 bucket
+        """
+        import json
+        s3_client = AwsHelper.get_client("s3", aws_region)
+        s3_client.put_object(
+            Bucket=bucket_name, 
+            Key=file_key, 
+            Body=json.dumps(data, default=str),
+            ContentType='application/json'
+        )
+        logger.info(f"Successfully saved JSON to s3://{bucket_name}/{file_key}")
+
+    @staticmethod
+    def read_json_from_s3(bucket_name, file_key, aws_region=None):
+        """
+        Read JSON file from S3 bucket
+        """
+        import json
+        s3_client = AwsHelper.get_client("s3", aws_region)
+        response = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+        json_content = response["Body"].read().decode("utf-8")
+        return json.loads(json_content)
+
+    @staticmethod
+    def delete_object_from_s3(bucket_name, file_key, aws_region=None):
+        """
+        Delete object from S3 bucket
+        """
+        s3_client = AwsHelper.get_client("s3", aws_region)
+        s3_client.delete_object(Bucket=bucket_name, Key=file_key)
+        logger.info(f"Successfully deleted s3://{bucket_name}/{file_key}")

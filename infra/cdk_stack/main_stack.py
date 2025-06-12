@@ -69,7 +69,7 @@ class MainStack(Stack):
             self,
             "StepFunctionsStack",
             query_function=lambda_stack.query_function,
-            make_inference_function=lambda_stack.make_inference_lambda,
+            initiate_batch_transform_function=lambda_stack.initiate_batch_transform_lambda,
             write_results_function=lambda_stack.write_results_function,
             config=config,
         )

@@ -14,18 +14,24 @@ def get_user_input(prompt, default_value, validator=None):
         else:
             return user_input
 
+def validate_aq_parameter(parameter):
+    """Validate air quality parameter selection"""
+    valid_parameters = ["PM 10", "PM 1", "PM 2.5"]
+    return parameter in valid_parameters
+
 def create_default_pre_config():
     config = ConfigParser()
     config["defaults"] = {
         "initial_data_file": "init_data.csv",
         "project_prefix": "demoapp",  # Added project_prefix with default value
+        "aq_parameter_prediction": "PM 2.5",  # Added air quality parameter with default value
     }
     return config
 
 def create_default_post_config():
     config = ConfigParser()
     config["defaults"] = {
-        "canvas_model_endpoint_name": "canvas-demo-deployment",
+        "canvas_model_id": "canvas-aq-model-12345678901234",
     }
     return config
 
@@ -57,9 +63,22 @@ def interactive_pre_config(config_path="pre-deployment-config.ini"):
         config["defaults"].get("initial_data_file", "init_data.csv"),
     ).lower()
     
+    # Get air quality parameter input with validation
+    print("\nAvailable air quality parameters:")
+    print("- PM 10")
+    print("- PM 1") 
+    print("- PM 2.5")
+    
+    aq_parameter_prediction = get_user_input(
+        "Enter the air quality parameter for prediction (PM 10, PM 1, or PM 2.5)",
+        config["defaults"].get("aq_parameter_prediction", "PM 2.5"),
+        validate_aq_parameter
+    )
+    
     # Update config with user input
     config["defaults"]["initial_data_file"] = initial_data_file
     config["defaults"]["project_prefix"] = project_prefix
+    config["defaults"]["aq_parameter_prediction"] = aq_parameter_prediction
 
     save_config(config, config_path)
     return config
@@ -67,13 +86,17 @@ def interactive_pre_config(config_path="pre-deployment-config.ini"):
 def interactive_post_config(config_path="post-deployment-config.ini"):
     config = load_or_create_config(config_path, is_pre_config=False)
 
-    canvas_model_endpoint_name = get_user_input(
-        "Enter your SageMaker Canvas Model Endpoint Name.",
-        config["defaults"].get("canvas_model_endpoint_name", "canvas-demo-deployment"),
+    print("\n=== SageMaker Canvas Configuration ===")
+    print("Please provide your SageMaker Canvas model details:")
+    print("You can find these in the SageMaker Canvas console after training your model.")
+    
+    canvas_model_id = get_user_input(
+        "Enter your SageMaker Canvas Model ID (e.g., canvas-aq-model-12345678901234)",
+        config["defaults"].get("canvas_model_id", "canvas-aq-model-12345678901234"),
     )
 
     # Update config object
-    config["defaults"]["canvas_model_endpoint_name"] = canvas_model_endpoint_name
+    config["defaults"]["canvas_model_id"] = canvas_model_id
 
     save_config(config, config_path)
     return config

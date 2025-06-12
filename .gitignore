@@ -11,3 +11,4 @@ infra/data/*
 .cdk.staging
 infra/cdk.out/*
 infra/cdk.context.json
+q_developer_notes/*
