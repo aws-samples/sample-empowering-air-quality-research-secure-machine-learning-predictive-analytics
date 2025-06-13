@@ -76,10 +76,10 @@ Instructions: Type your value and press Enter, or just press Enter to use the de
 Now let's find your SageMaker Canvas model and endpoint.
 
 🔍 Discovering your Canvas models...
-✅ Found Canvas model: canvas-model-2025-02-18-23-55-02-559819
+✅ Found Canvas model: canvas-model-placeholder-update-after-training
 
 Enter your Canvas Model ID:
-Default value: canvas-model-2025-02-18-23-55-02-559819
+Default value: canvas-model-placeholder-update-after-training
 Instructions: Type your value and press Enter, or just press Enter to use the default
 > 
 ```
@@ -95,8 +95,7 @@ Instructions: Type your value and press Enter, or just press Enter to use the de
 Project Prefix:     demoapp
 Data File:          init_data.csv
 AQ Parameter:       PM 2.5
-Canvas Model ID:    canvas-model-2025-02-18-23-55-02-559819
-Canvas Endpoint:    canvas-AQDeployment
+Canvas Model ID:    canvas-model-placeholder-update-after-training
 
 Continue with this configuration? (y/N): 
 ```
@@ -177,13 +176,13 @@ Using default: PM 2.5
 Now let's find your SageMaker Canvas model and endpoint.
 
 🔍 Discovering your Canvas models...
-✅ Found Canvas model: canvas-model-2025-02-18-23-55-02-559819
+✅ Found Canvas model: canvas-model-placeholder-update-after-training
 
 Enter your Canvas Model ID:
-Default value: canvas-model-2025-02-18-23-55-02-559819
+Default value: canvas-model-placeholder-update-after-training
 Instructions: Type your value and press Enter, or just press Enter to use the default
 > [PRESS ENTER]
-Using default: canvas-model-2025-02-18-23-55-02-559819
+Using default: canvas-model-placeholder-update-after-training
 
 Enter your Canvas Endpoint Name:
 Default value: canvas-AQDeployment
@@ -196,8 +195,7 @@ Using default: canvas-AQDeployment
 Project Prefix:     demoapp
 Data File:          init_data.csv
 AQ Parameter:       PM 2.5
-Canvas Model ID:    canvas-model-2025-02-18-23-55-02-559819
-Canvas Endpoint:    canvas-AQDeployment
+Canvas Model ID:    canvas-model-placeholder-update-after-training
 
 Continue with this configuration? (y/N): y
 

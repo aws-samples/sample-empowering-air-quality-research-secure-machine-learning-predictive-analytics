@@ -129,12 +129,30 @@ For detailed format requirements, see `infra/data/README.md` after running setup
 
 ## SageMaker Canvas Configuration
 
-Complete these steps via AWS Console:
-1. Configure Canvas App in SageMaker Domain
-2. Train and deploy your model
-3. Note your model endpoint name for configuration
+### Canvas Model Creation (Required)
 
-The setup script will automatically attempt to discover your Canvas models and endpoints. If auto-discovery fails, you can find your Canvas resources manually in the AWS Console under SageMaker → Canvas.
+Canvas model creation is a **separate manual step** that must be done following the blog post instructions:
+
+1. **Deploy Infrastructure First**: Run `./bin/setup.sh --use-defaults --deploy`
+2. **Create Canvas Model**:
+   - Follow the detailed Canvas setup instructions in the blog post
+   - This includes data preparation, model training, and deployment steps
+   - The blog post provides step-by-step guidance with screenshots
+3. **Update Configuration**: 
+   - Run `./bin/setup.sh` again to update the model ID
+   - Re-deploy with `cd infra && cdk deploy`
+
+### Auto-Discovery
+
+The setup script will automatically attempt to discover your Canvas models. If no models are found:
+- The script will use a placeholder model ID
+- You can complete the infrastructure deployment
+- Follow the blog post to create your Canvas model
+- Re-run the setup to update the configuration
+
+### Manual Configuration
+
+If auto-discovery fails, you can find your Canvas model ID manually in the SageMaker Canvas console as described in the blog post.
 
 ## Deployment
 
@@ -198,9 +216,10 @@ The cleanup script removes:
 - Ensure UTF-8 encoding and timezone in timestamps
 
 **Canvas Model Discovery:**
-- The setup script automatically discovers your Canvas models and endpoints
-- If auto-discovery fails, manually configure model ID in the AWS Console
-- Ensure Canvas models are deployed and accessible
+- The setup script automatically discovers your Canvas models
+- If no models are found, a placeholder ID is used for initial deployment
+- Follow the blog post to create your Canvas model after infrastructure deployment
+- Re-run setup script to update the model ID and re-deploy
 
 ### Getting Help
 - Check CloudWatch logs for Lambda function errors

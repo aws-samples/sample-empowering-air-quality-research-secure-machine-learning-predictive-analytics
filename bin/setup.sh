@@ -137,12 +137,19 @@ discover_canvas_models() {
     fi
     
     if [ "$USE_DEFAULTS" = false ]; then
-        echo -e "${YELLOW}⚠️  Could not auto-discover Canvas models${NC}" >&2
-        echo "   Please check your AWS credentials and Canvas models manually" >&2
-        echo "   You can find your model ID in the SageMaker Canvas console" >&2
+        echo -e "${YELLOW}⚠️  No Canvas models found${NC}" >&2
+        echo -e "${YELLOW}📋 Canvas Model Setup Required:${NC}" >&2
+        echo "   1. Complete this infrastructure deployment first" >&2
+        echo "   2. Follow the blog post to create and deploy your Canvas model:" >&2
+        echo "      • See the detailed Canvas setup instructions in the blog post" >&2
+        echo "      • This includes data preparation, model training, and deployment" >&2
+        echo "   3. Re-run this setup script to configure the model ID" >&2
+        echo "   4. Re-deploy the infrastructure with: cd infra && cdk deploy" >&2
+        echo >&2
+        echo -e "${BLUE}💡 For now, we'll use a placeholder model ID${NC}" >&2
         echo >&2
     fi
-    echo "canvas-model-2025-02-18-23-55-02-559819"  # Return a placeholder
+    echo "canvas-model-placeholder-update-after-training"  # Placeholder that's clearly identifiable
 }
 
 echo -e "${GREEN}📋 Step 1: Basic Configuration${NC}"
@@ -205,9 +212,10 @@ fi
 echo
 echo -e "${GREEN}📋 Step 3: Canvas Model Discovery${NC}"
 if [ "$USE_DEFAULTS" = true ]; then
-    echo "Auto-discovering Canvas models and endpoints..."
+    echo "Auto-discovering Canvas models..."
 else
-    echo "Now let's find your SageMaker Canvas model and endpoint."
+    echo "Now let's find your SageMaker Canvas model."
+    echo -e "${BLUE}💡 Note: Canvas model creation is a separate manual step${NC}"
 fi
 echo
 
@@ -450,4 +458,15 @@ echo "  • Check AWS costs before deploying (RDS, Lambda, SageMaker endpoints)"
 echo "  • Use 'cdk destroy' to clean up resources when done"
 echo "  • The database init Lambda will process your data file automatically"
 echo
+if [[ "$CANVAS_MODEL_ID" == *"placeholder"* ]]; then
+    echo -e "${YELLOW}📋 Next Steps - Canvas Model Setup:${NC}"
+    echo "  1. Deploy this infrastructure first: cd infra && cdk deploy"
+    echo "  2. Follow the blog post to create and deploy your Canvas model:"
+    echo "     • See the detailed Canvas setup instructions in the blog post"
+    echo "     • This covers data preparation, model training, and deployment"
+    echo "  3. Update configuration with your model ID:"
+    echo "     • Run: ./bin/setup.sh (to update model ID)"
+    echo "     • Re-deploy: cd infra && cdk deploy"
+    echo
+fi
 echo -e "${GREEN}Happy ML modeling! 🤖${NC}"
