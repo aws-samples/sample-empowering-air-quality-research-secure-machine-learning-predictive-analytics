@@ -108,7 +108,7 @@ prompt_with_default() {
     echo -e "${BLUE}Default value: ${GREEN}$default${NC}" >&2
     echo -e "${BLUE}Instructions: Type your value and press Enter, or just press Enter to use the default${NC}" >&2
     echo -n "> " >&2
-    read result
+    read -r result
     
     if [ -z "$result" ]; then
         echo -e "${GREEN}Using default: $default${NC}" >&2
@@ -126,9 +126,10 @@ discover_canvas_models() {
     fi
     
     # Try to use Python discovery script
-    local discovered_model=$(python3 "$PROJECT_ROOT/infra/scripts/discover_canvas.py" models 2>/dev/null || echo "")
+    local discovered_model
+    discovered_model=$(python3 "$PROJECT_ROOT/infra/scripts/discover_canvas.py" models 2>/dev/null || echo "")
     
-    if [ ! -z "$discovered_model" ]; then
+    if [ -n "$discovered_model" ]; then
         if [ "$USE_DEFAULTS" = false ]; then
             echo -e "${GREEN}✅ Found Canvas model: $discovered_model${NC}" >&2
         fi
@@ -196,6 +197,7 @@ fi
 
 # Activate virtual environment
 echo "Activating virtual environment..."
+# shellcheck source=/dev/null
 source .venv/bin/activate
 
 # Install dependencies
@@ -354,7 +356,7 @@ echo "CDK config file exists: $([ -f "cdk.json" ] && echo "YES" || echo "NO")"
 
 # Bootstrap CDK
 echo "Bootstrapping CDK..."
-cdk bootstrap aws://$AWS_ACCOUNT/$AWS_REGION
+cdk bootstrap "aws://$AWS_ACCOUNT/$AWS_REGION"
 
 # Synthesize CDK
 echo "Synthesizing CDK stack..."

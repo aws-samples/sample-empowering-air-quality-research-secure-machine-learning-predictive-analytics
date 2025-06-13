@@ -65,7 +65,8 @@ find_and_remove() {
     local description="$2"
     local type="${3:-f}"  # Default to files
     
-    local count=$(find . -type "$type" -name "$pattern" 2>/dev/null | wc -l)
+    local count
+    count=$(find . -type "$type" -name "$pattern" 2>/dev/null | wc -l)
     if [ "$count" -gt 0 ]; then
         echo -e "${YELLOW}  Removing $count $description${NC}"
         find . -type "$type" -name "$pattern" -exec rm -rf {} + 2>/dev/null || true
