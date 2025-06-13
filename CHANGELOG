@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [V 1.0.1]
 
 ### Added
-- Configurable air quality parameter selection (PM 2.5, PM 10, PM 1) for targeted predictions
+- Configurable air quality parameter selection (PM 2.5, PM 10, PM 1, Temperature, Humidity, etc.) for targeted predictions
 - Comprehensive architecture documentation with interactive Mermaid diagrams
 - Step Functions timeout configuration with 1-hour step timeouts and 2-hour overall timeout
 - Parameter filtering in database queries for specific air quality parameters

@@ -36,7 +36,7 @@ The solution implements a comprehensive serverless architecture for air quality 
 - **AWS Systems Manager Parameter Store** for job metadata and configuration
 
 ### Key Architectural Features:
-- **Configurable Parameter Selection**: Choose between PM 2.5, PM 10, or PM 1 for targeted predictions
+- **Configurable Parameter Selection**: Choose between PM 2.5, PM 10, PM 1, Temperature, Humidity, etc. for targeted predictions
 - **Serverless Design**: Scales automatically based on demand, cost-effective
 - **Batch Processing**: Efficient handling of large datasets through SageMaker Batch Transform
 - **Fault Tolerance**: Built-in retry logic and error handling via Step Functions
@@ -57,195 +57,161 @@ The solution implements a comprehensive serverless architecture for air quality 
 - Git
 
 ### Data Requirements
-The system expects air quality data in CSV format with the following schema:
+The system expects air quality data in CSV format with the following fields (order flexible):
 
+```
 timestamp,value,parameter,device_id,chip_id,sensor_type,sensor_id,location_id,location,street_name,city,country,latitude,longitude,deployment_date
+```
+
+**Important Notes:**
+- Column order is flexible - headers are used to identify fields
+- Parameter field can contain any measurement type (PM 2.5, Temperature, Humidity, etc.)
+- Timestamps must include timezone information
+- GPS coordinates should be in decimal degrees format
 
 Example Record:
-
-2023-07-15 09:22:31.456 +0200,42187,Temperature,23,esp8266-87654321,1,37,42,ABC University,Main Street,Springfield,United States,38.7812345,-92.1234567,2022-05-12 08:45:22.310 +0200
-
+```
+2023-07-15 09:22:31.456 +0200,25.4,PM 2.5,24,esp8266-87654322,2,38,43,City Center,Oak Avenue,Springfield,United States,38.7823456,-92.1245678,2022-05-12 08:45:22.310 +0200
+```
 
 ## Installation Guide
 
-1. Clone the repository:
-   
-   ```bash
-   git clone https://github.com/aws-samples/sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics.git
-   cd sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics
-   ```
+### Simple Setup (Recommended)
 
-2. Run the setup script from the project's root folder:
+Use the automated setup script that handles the complete configuration:
 
-   ```bash
-   ./bin/setup.sh
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/aws-samples/sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics.git
+cd sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics
 
-   This script will:
-   - Create and activate a virtual environment
-   - Install required dependencies
-   - Create pre and post configs with default values
-   - Prepare Lambda layer packages
-   - Bootstrap the AWS CDK stack
-   - Synthesize the AWS CDK stack
+# Interactive setup (prompts for configuration)
+./bin/setup.sh
 
-3. Activate virtual environment:
+# Non-interactive setup (uses defaults)
+./bin/setup.sh --use-defaults
 
-   ```bash
-   source .venv/bin/activate
-   ```
+# Setup and deploy in one step
+./bin/setup.sh --use-defaults --deploy
+```
 
-## Copy Initial Air Quality Dataset
+**Setup Options:**
+- **Interactive Mode** (default): Prompts for each configuration option with helpful defaults
+- **Non-Interactive Mode** (`--use-defaults` or `-ud`): Uses sensible defaults automatically
+- **Deploy Mode** (`--deploy` or `-d`): Automatically deploys infrastructure after setup
 
-1. Navigate to the `infra/data` directory:
+**Interactive Mode Help:**
+If you get stuck at prompts, simply press Enter to use default values, or run with `--use-defaults` for fully automated setup.
 
-   ```bash
-   cd infra/data
-   ```
+The script automatically:
+- Discovers your Canvas models and endpoints
+- Sets up Python environment and dependencies
+- Creates configuration files
+- Builds Lambda layer packages
+- Bootstraps CDK and synthesizes templates
+- Optionally deploys infrastructure (with `--deploy` flag)
 
-2. Copy your initial air quality dataset in CSV format to this directory. The system expects data with the following schema:
+## Data File Setup
 
-   ```
-   timestamp,value,parameter,device_id,chip_id,sensor_type,sensor_id,location_id,location,street_name,city,country,latitude,longitude,deployment_date
-   ```
+### Required Data File
+Before deployment, you must provide your air quality dataset:
 
-   Example record:
-   ```
-   2023-07-15 09:22:31.456 +0200,42187,Temperature,23,esp8266-87654321,1,37,42,ABC University,Main Street,Springfield,United States,38.7812345,-92.1234567,2022-05-12 08:45:22.310 +0200
-   ```
+1. **Location**: Place your CSV file at `infra/data/init_data.csv` (or your configured filename)
+2. **Format**: CSV with required headers (see Prerequisites section)
+3. **Size**: Large files (>100MB) may take longer to process
+4. **Encoding**: Use UTF-8 encoding
 
-   **Note**: The system uploads the file in CSV format to S3 bucket provided by our sample solution as part of the CDK deployment.
+### Alternative Approaches
+- **Deploy First**: Deploy infrastructure, then add data file and run database initialization Lambda
+- **Custom Filename**: Configure different filename during setup
 
-3. Return to project's root folder:
-
-   ```bash
-   cd ../..
-   ```
-
-## Pre-Deployment Configuration
-
-1. Navigate to the `infra/scripts` directory:
-
-   ```bash
-   cd infra/scripts
-   ```
-
-2. Run the pre-deployment configuration script:
-
-   ```bash
-   python3 config.py --pre --interactive
-   ```
-
-   This will prompt you for the following pre-deployment configuration options:
-   - **Project prefix name**: Used for resource naming (default: "demoapp")
-   - **Initial data filename**: Name of your air quality dataset CSV file (default: "init_data.csv")
-   - **Air quality parameter**: Choose from PM 10, PM 1, or PM 2.5 for targeted predictions (default: "PM 2.5")
-
-3. Return to project's root folder:
-
-   ```bash
-   cd ../..
-   ```
-
-## Infrastructure Installation
-
-1. Deploy the infrastructure:
-
-   ```bash
-   cd infra
-   cdk deploy
-   ```
-
-   This will install AWS resources required for our solution.
-
-2. Return to project's root folder.
-
-   ```bash
-   cd ..
-   ```
-
-
-## Air Quality Database Initialization
-
-1. Access AWS Console
-2. Navigate to Lambda
-3. Execute DB Initialization function
+For detailed format requirements, see `infra/data/README.md` after running setup.
 
 ## SageMaker Canvas Configuration
 
-Refer to our AWS Blog to complete the following steps:
+Complete these steps via AWS Console:
 1. Configure Canvas App in SageMaker Domain
-2. Train and deploy model
-3. Record model endpoint name
+2. Train and deploy your model
+3. Note your model endpoint name for configuration
 
-### Finding Your Canvas Model Details
+The setup script will automatically attempt to discover your Canvas models and endpoints. If auto-discovery fails, you can find your Canvas resources manually in the AWS Console under SageMaker → Canvas.
 
-To help you find your Canvas model ID and endpoint name, use the provided discovery script:
+## Deployment
 
+### After Setup
 ```bash
-cd infra/scripts
-./find-canvas-models.sh
+# If you didn't use --deploy flag during setup
+cd infra
+cdk deploy
 ```
 
-This script will:
-- List all Canvas models in your AWS account
-- Show Canvas endpoints and their status
-- Display creation dates and other helpful information
-
-**Alternative usage:**
-```bash
-# Show detailed information
-./find-canvas-models.sh --verbose
-
-# Search in a specific region
-./find-canvas-models.sh --region us-west-2
-
-# Get JSON output for automation
-./find-canvas-models.sh --json
-
-# Show all models (not just Canvas)
-python3 list_sagemaker_models.py
-```
-
-## Post-Deployment Configuration
-
-1. Navigate to the `infra/scripts` directory:
-
-   ```bash
-   cd infra/scripts
-   ```
-
-2. Run the post-deployment configuration script:
-
-   ```bash
-   python3 config.py --post --interactive
-   ```
-
-   This will prompt you for the following post-deployment configuration options:
-   - **Canvas model endpoint name**: SageMaker Canvas Model Endpoint Name (default: "canvas-demo-deployment")
-   - **Canvas model ID**: SageMaker Canvas Model ID (e.g., "canvas-aq-model-12345678901234")
-
-3. Return to project's root folder.
-
-   ```bash
-   cd ../..
-   ```
-
-## Infrastructure Update
-
-1. Deploy the updated infrastructure:
-
-   ```bash
-   cd infra
-   cdk deploy
-   ```
-
-2. Return to project's root folder.
-
-   ```bash
-   cd ../..
-   ```
+### Database Initialization
+After deployment:
+1. Access AWS Console → Lambda
+2. Execute the DB Initialization function
+3. Your system will process the data file and be ready for predictions
 
 ## Cleanup
 
-To prevent ongoing charges, refer to our AWS Blog to complete Cleanup steps.
+### AWS Resources
+To prevent ongoing charges, clean up AWS resources through the console or CLI.
+
+### Local Environment
+Clean up generated files and temporary artifacts:
+
+```bash
+# Comprehensive cleanup of generated files
+./bin/cleanup.sh
+```
+
+The cleanup script removes:
+- Python cache files and compiled bytecode
+- CDK generated files and build artifacts  
+- Lambda layer packages and zip files
+- Build and distribution directories
+- Log files and temporary files
+- IDE and editor configuration files
+- AWS deployment artifacts
+- Test artifacts and coverage files
+
+**Interactive Options:**
+- Configuration files (asks for confirmation)
+- Virtual environment (asks for confirmation)  
+- Data files (asks for confirmation)
+
+## Troubleshooting
+
+### Common Issues
+
+**Setup Script Stuck at Prompt:**
+- Press Enter to use default values
+- Use `./bin/setup.sh --use-defaults` for non-interactive setup
+
+**CDK Deployment Errors:**
+- Ensure AWS credentials are configured: `aws configure`
+- Check you're in the correct directory: `cd infra`
+- Verify CDK is bootstrapped in your region
+
+**Data File Issues:**
+- Verify file exists at `infra/data/init_data.csv`
+- Check CSV format matches required headers
+- Ensure UTF-8 encoding and timezone in timestamps
+
+**Canvas Model Discovery:**
+- The setup script automatically discovers your Canvas models and endpoints
+- If auto-discovery fails, manually configure model ID in the AWS Console
+- Ensure Canvas models are deployed and accessible
+
+### Getting Help
+- Check CloudWatch logs for Lambda function errors
+- Review CDK synthesis output for configuration issues
+- Use `./bin/setup.sh --help` for setup options
+
+## Architecture Benefits
+
+- **Cost-Effective**: Serverless architecture scales with usage
+- **Flexible**: Supports any measurement parameter, not just air quality
+- **Secure**: Encrypted data, least privilege access, VPC isolation
+- **Scalable**: Handles large datasets through batch processing
+- **Observable**: Comprehensive monitoring and logging
+- **Maintainable**: Infrastructure as code with automated deployment

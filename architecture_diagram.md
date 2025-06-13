@@ -6,7 +6,7 @@
 graph TB
     %% External Data Sources
     subgraph "Data Sources"
-        CSV[Air Quality CSV Data<br/>PM 2.5, PM 10, PM 1]
+        CSV[Air Quality CSV Data<br/>PM 2.5, PM 10, PM 1, Temperature, Humidity, etc.]
     end
 
     %% EventBridge Scheduler
@@ -171,9 +171,9 @@ graph TB
 ## Detailed Component Description
 
 ### 1. Data Ingestion Layer
-- **CSV Data Sources**: Air quality sensor data containing PM 2.5, PM 10, and PM 1 measurements
+- **CSV Data Sources**: Air quality sensor data containing PM 2.5, PM 10, and PM 1, Temperature, Humidity, etc. measurements
 - **S3 Initial Dataset**: Raw sensor data uploaded to `initial_dataset/` prefix
-- **Configuration**: Users can select which parameter (PM 2.5, PM 10, or PM 1) to focus on for predictions
+- **Configuration**: Users can select which parameter (PM 2.5, PM 10, PM 1, Temperature, Humidity, etc.) to focus on for predictions
 
 ### 2. Scheduling & Orchestration
 - **EventBridge Scheduler**: Triggers the workflow every 24 hours
@@ -232,7 +232,7 @@ graph TB
 
 1. **Initialization**: CSV data is uploaded to S3, database is initialized with schema and initial data
 2. **Scheduled Trigger**: EventBridge Scheduler triggers Step Functions every 24 hours
-3. **Data Query**: Lambda function queries database for new records matching the configured parameter (PM 2.5, PM 10, or PM 1)
+3. **Data Query**: Lambda function queries database for new records matching the configured parameter (PM 2.5, PM 10, PM 1, Temperature, Humidity, etc.)
 4. **Conditional Processing**: If records are found, proceed with ML inference; otherwise, end workflow
 5. **Batch Transform Initiation**: InitiateBatchTransform Lambda creates SageMaker batch job and stores task token
 6. **Step Functions Wait**: Step Functions enters WAIT_FOR_TASK_TOKEN state
