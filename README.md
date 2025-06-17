@@ -146,13 +146,20 @@ The script automatically:
 
 ## Data File Setup
 
-### Required Data File
-Before deployment, you must provide your air quality dataset:
+You have two options for providing your air quality dataset:
 
+### Option 1: Local File Approach
 1. **Location**: Place your CSV file at `infra/data/init_data.csv` (or your configured filename)
 2. **Format**: CSV with required headers (see Prerequisites section)
-3. **Size**: Large files (>100MB) may take longer to process
+3. **Size**: Suitable for smaller files (<100MB)
 4. **Encoding**: Use UTF-8 encoding
+5. **Deploy**: Run setup with the file in place
+
+### Option 2: S3 Upload Approach (Recommended for Large Files)
+1. **Deploy First**: Deploy infrastructure without local data file
+2. **Upload to S3**: Upload your CSV file to the S3 bucket location `initial_dataset/`
+3. **Initialize Database**: Run the database initialization Lambda function
+4. **Processing**: Lambda will process the file from S3 and populate the database
 
 ### Alternative Approaches
 - **Deploy First**: Deploy infrastructure, then add data file and run database initialization Lambda

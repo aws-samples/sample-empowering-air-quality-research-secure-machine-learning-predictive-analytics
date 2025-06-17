@@ -101,19 +101,33 @@ get_config_value() {
     local key="$1"
     local array_prefix="$2"  # Either "PRE_DEPLOYMENT" or "POST_DEPLOYMENT" or "ALL_CONFIG"
     
-    # Use eval to access the arrays dynamically
-    local keys_array="${array_prefix}_KEYS[@]"
-    local values_array="${array_prefix}_VALUES[@]"
-    
-    eval "local keys=(\"\${$keys_array}\")"
-    eval "local values=(\"\${$values_array}\")"
-    
-    for i in "${!keys[@]}"; do
-        if [ "${keys[$i]}" = "$key" ]; then
-            echo "${values[$i]}"
-            return 0
-        fi
-    done
+    # Use case statement to handle different array prefixes
+    case "$array_prefix" in
+        "PRE_DEPLOYMENT")
+            for i in "${!PRE_DEPLOYMENT_KEYS[@]}"; do
+                if [ "${PRE_DEPLOYMENT_KEYS[$i]}" = "$key" ]; then
+                    echo "${PRE_DEPLOYMENT_VALUES[$i]}"
+                    return 0
+                fi
+            done
+            ;;
+        "POST_DEPLOYMENT")
+            for i in "${!POST_DEPLOYMENT_KEYS[@]}"; do
+                if [ "${POST_DEPLOYMENT_KEYS[$i]}" = "$key" ]; then
+                    echo "${POST_DEPLOYMENT_VALUES[$i]}"
+                    return 0
+                fi
+            done
+            ;;
+        "ALL_CONFIG")
+            for i in "${!ALL_CONFIG_KEYS[@]}"; do
+                if [ "${ALL_CONFIG_KEYS[$i]}" = "$key" ]; then
+                    echo "${ALL_CONFIG_VALUES[$i]}"
+                    return 0
+                fi
+            done
+            ;;
+    esac
     echo ""
 }
 
@@ -461,34 +475,48 @@ else
 fi
 echo "=============================================="
 echo
-echo -e "${RED}⚠️  IMPORTANT: Data File Required${NC}"
-echo "=============================================="
-echo -e "${YELLOW}Before deployment, you MUST provide your air quality dataset:${NC}"
+
+# Check if data file exists and show appropriate message
+if [ -f "infra/data/$DATA_FILE" ]; then
+    echo -e "${GREEN}✅ Data File Ready${NC}"
+    echo "=============================================="
+    echo -e "${GREEN}Your data file is properly configured and ready for deployment.${NC}"
+else
+    echo -e "${YELLOW}📋 Data File Setup Required${NC}"
+    echo "=============================================="
+    echo -e "${BLUE}Choose one of the following approaches to provide your data:${NC}"
+fi
 echo
+
 echo -e "${BLUE}1. Data File Location:${NC}"
 echo -e "   Copy your CSV file to: ${YELLOW}infra/data/$DATA_FILE${NC}"
 echo
+
 echo -e "${BLUE}2. Required CSV Fields (order flexible):${NC}"
 echo "   timestamp,value,parameter,device_id,chip_id,sensor_type,sensor_id,location_id,location,street_name,city,country,latitude,longitude,deployment_date"
 echo
+
 echo -e "${BLUE}3. Example Data Record:${NC}"
 echo "   2023-07-15 09:22:31.456 +0200,25.4,PM 2.5,24,esp8266-87654322,2,38,43,City Center,Oak Avenue,Springfield,United States,38.7823456,-92.1245678,2022-05-12 08:45:22.310 +0200"
 echo
+
 echo -e "${BLUE}4. Important Notes:${NC}"
 echo -e "   • Column order is flexible - headers will be used to identify fields"
 echo -e "   • Parameter field can contain any measurement type (not limited to PM values)"
 echo -e "   • Your configured parameter ($AQ_PARAMETER) will be used for predictions"
 echo
+
 echo -e "${BLUE}5. Detailed Format Guide:${NC}"
 echo -e "   See: ${YELLOW}infra/data/README.md${NC} for complete field descriptions"
 echo
+
 echo -e "${BLUE}6. Check Data File:${NC}"
 if [ -f "infra/data/$DATA_FILE" ]; then
     echo -e "   ${GREEN}✅ Data file found: infra/data/$DATA_FILE${NC}"
     echo -e "   ${GREEN}   You can proceed with deployment${NC}"
 else
     echo -e "   ${RED}❌ Data file NOT found: infra/data/$DATA_FILE${NC}"
-    echo -e "   ${YELLOW}   You MUST add this file before deployment${NC}"
+    echo -e "   ${YELLOW}   Two options available (see Next Steps below)${NC}"
 fi
 echo
 echo -e "${GREEN}Next Steps:${NC}"
@@ -499,10 +527,18 @@ if [ "$DEPLOY" = true ]; then
         echo "   1. Initialize database using the Lambda function in AWS Console"
         echo "   2. Your system will be ready to process air quality data!"
     else
-        echo -e "${YELLOW}📋 Infrastructure deployed but data file missing:${NC}"
-        echo -e "   1. ${RED}Add your data file to: infra/data/$DATA_FILE${NC}"
-        echo "   2. Initialize database using the Lambda function in AWS Console"
-        echo "   3. Your system will be ready to process air quality data!"
+        echo -e "${YELLOW}📋 Infrastructure deployed - Data file options:${NC}"
+        echo
+        echo -e "${BLUE}Option 1: Local file approach${NC}"
+        echo -e "   1. Add your data file to: ${YELLOW}infra/data/$DATA_FILE${NC}"
+        echo "   2. Run the database initialization Lambda function in AWS Console"
+        echo
+        echo -e "${BLUE}Option 2: S3 upload approach${NC}"
+        echo -e "   1. Upload your data file to S3 bucket location: ${YELLOW}initial_dataset/${NC}"
+        echo "   2. Run the database initialization Lambda function in AWS Console"
+        echo "   3. The Lambda will process the file from S3 and populate the database"
+        echo
+        echo -e "${GREEN}💡 Both approaches work - choose based on your preference${NC}"
     fi
 else
     if [ -f "infra/data/$DATA_FILE" ]; then
@@ -511,16 +547,21 @@ else
         echo "   2. Initialize database using the Lambda function in AWS Console"
         echo "   3. Your system will be ready to process air quality data!"
     else
-        echo -e "${YELLOW}📋 Before deployment:${NC}"
-        echo -e "   1. ${RED}Add your data file to: infra/data/$DATA_FILE${NC}"
-        echo "   2. Verify the CSV format matches the required schema"
-        echo -e "   3. Then deploy: ${YELLOW}cd infra && cdk deploy${NC}"
-        echo "   4. Initialize database using the Lambda function in AWS Console"
+        echo -e "${YELLOW}📋 Data file options - Choose one approach:${NC}"
         echo
-        echo -e "${BLUE}💡 Alternative approach:${NC}"
-        echo -e "   • Deploy infrastructure first: ${YELLOW}cd infra && cdk deploy${NC}"
-        echo -e "   • Add data file later: ${YELLOW}infra/data/$DATA_FILE${NC}"
-        echo "   • Then run the database initialization Lambda function"
+        echo -e "${BLUE}Option 1: Local file approach${NC}"
+        echo -e "   1. Add your data file to: ${YELLOW}infra/data/$DATA_FILE${NC}"
+        echo "   2. Verify the CSV format matches the required schema"
+        echo -e "   3. Deploy: ${YELLOW}cd infra && cdk deploy${NC}"
+        echo "   4. Run the database initialization Lambda function in AWS Console"
+        echo
+        echo -e "${BLUE}Option 2: S3 upload approach${NC}"
+        echo -e "   1. Deploy infrastructure first: ${YELLOW}cd infra && cdk deploy${NC}"
+        echo -e "   2. Upload your data file to S3 bucket location: ${YELLOW}initial_dataset/${NC}"
+        echo "   3. Run the database initialization Lambda function in AWS Console"
+        echo "   4. The Lambda will process the file from S3 and populate the database"
+        echo
+        echo -e "${GREEN}💡 Recommendation:${NC} Use Option 2 if you have large data files or prefer S3 storage"
     fi
 fi
 echo

@@ -160,7 +160,7 @@ class LambdaStack(NestedStack):
                     "sagemaker:DescribeTransformJob"
                 ],
                 resources=[
-                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{config.get('canvas_model_id')}",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{config.get('aq_canvas_model_id')}",
                     f"arn:aws:sagemaker:{self.region}:{self.account}:transform-job/*"
                 ]
             )
