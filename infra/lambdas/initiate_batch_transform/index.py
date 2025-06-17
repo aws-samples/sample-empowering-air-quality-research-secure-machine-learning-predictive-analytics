@@ -135,28 +135,8 @@ def lambda_handler(event, context):
         
         logger.info(f"Successfully read {len(df)} records from input file")
         
-        # Prepare data for batch prediction
-        required_columns = [
-            'timestamp', 
-            'parameter', 
-            'sensor_type', 
-            'sensor_id', 
-            'location_id', 
-            'latitude', 
-            'longitude', 
-            'deployment_date'
-        ]
-
-        # Check if all required columns exist
-        missing_columns = set(required_columns) - set(df.columns)
-        if missing_columns:
-            error_message = f"Missing required columns in input data: {missing_columns}"
-            logger.error(error_message)
-            raise Exception(error_message)
-
-        # Create input dataframe with only the required columns
-        input_df = df[required_columns]
-        logger.info(f"Using {len(required_columns)} columns for prediction: {required_columns}")
+        # Prepare data for batch prediction using configured attributes
+        input_df = SageMakerHelper.prepare_prediction_data(df)
         
         # Generate a unique ID for this batch prediction job
         batch_job_id = str(uuid.uuid4())[:8]

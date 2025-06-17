@@ -584,7 +584,7 @@ class LambdaStack(NestedStack):
 
         env_vars.update(
             {
-                "LOG_LEVEL": config.get("lambda_logs_level", "INFO").upper(),
+                "LOG_LEVEL": config.get("log_level", "INFO").upper(),
                 "DB_DUMP_PREFIX": "initial_dataset",
                 "DB_DUMP_FILE": db_dump_file,
                 "SERVICE_NAME": "db_init_lambda",
@@ -602,13 +602,14 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "query_lambda",
                 "RETRIEVAL_PREFIX": "retrieved_from_db",
                 "DB_USERNAME": "reader_user",
                 "READER_ROLE_NAME": self.reader_role.role_name,
                 "AWS_ACCOUNT_ID": self.account,
                 "AQ_PARAMETER_PREDICTION": str(config.get("aq_parameter_prediction", "PM 2.5")),
+                "MISSING_VALUE_PATTERN_MATCH": str(config.get("missing_value_pattern_match", "[65535]")),
             }
         )
         return env_vars
@@ -617,7 +618,7 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "writer_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
                 "DB_USERNAME": "writer_user",
@@ -631,11 +632,18 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "initiate_batch_transform_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
-                "CANVAS_MODEL_ID": str(config.get("canvas_model_id", "")),
+                "CANVAS_MODEL_ID": str(config.get("aq_canvas_model_id", "")),  # Updated to use aq_canvas_model_id
                 "BATCH_CALLBACK_FUNCTION_NAME": f"{config.get('project_prefix', 'demoapp')}-BatchTransformCallback",
+                
+                # New configurable batch transform parameters
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
+                "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
+                "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),
+                "BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS": str(config.get("batch_transform_check_interval_in_seconds", "10")),
             }
         )
         return env_vars
@@ -644,9 +652,16 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "batch_transform_callback_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
+                
+                # Add the same batch transform configuration parameters for consistency
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
+                "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
+                "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),
+                "BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS": str(config.get("batch_transform_check_interval_in_seconds", "10")),
             }
         )
         return env_vars

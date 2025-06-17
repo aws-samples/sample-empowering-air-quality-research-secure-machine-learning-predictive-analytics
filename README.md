@@ -76,40 +76,73 @@ Example Record:
 
 ## Installation Guide
 
+### Prerequisites Check
+
+Before starting, ensure you have:
+- AWS CLI configured with appropriate credentials
+- Python 3.10+
+- AWS CDK for Python
+- Your air quality data in CSV format
+
 ### Simple Setup (Recommended)
 
-Use the automated setup script that handles the complete configuration:
-
+**Step 1: Clone Repository**
 ```bash
 # Clone the repository
 git clone https://github.com/aws-samples/sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics.git
 cd sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics
+```
 
-# Interactive setup (prompts for configuration)
-./bin/setup.sh
+**Step 2: Customize Configuration (Optional)**
+```bash
+# Edit basic settings
+vim infra/scripts/pre-deployment-config.ini
 
-# Non-interactive setup (uses defaults)
-./bin/setup.sh --use-defaults
+# Edit Canvas model settings  
+vim infra/scripts/post-deployment-config.ini
+```
 
-# Setup and deploy in one step
+**Step 3: Add Your Data**
+```bash
+# Place your CSV file (update filename in config if different)
+cp your-data.csv infra/data/init_data.csv
+```
+
+**Step 4: Deploy**
+```bash
+# Setup and deploy in one command
 ./bin/setup.sh --use-defaults --deploy
 ```
 
-**Setup Options:**
-- **Interactive Mode** (default): Prompts for each configuration option with helpful defaults
-- **Non-Interactive Mode** (`--use-defaults` or `-ud`): Uses sensible defaults automatically
-- **Deploy Mode** (`--deploy` or `-d`): Automatically deploys infrastructure after setup
+**Configuration Files:**
+The setup requires two configuration files that are provided with the stack:
+- `infra/scripts/pre-deployment-config.ini` (basic settings)
+- `infra/scripts/post-deployment-config.ini` (Canvas model)
 
-**Interactive Mode Help:**
-If you get stuck at prompts, simply press Enter to use default values, or run with `--use-defaults` for fully automated setup.
+Edit these files as needed to customize your deployment.
+
+### Alternative Setup Options
+
+**Interactive Setup:**
+```bash
+# Edit config files as needed
+./bin/setup.sh                    # Shows parameters and asks for confirmation
+```
+
+**Setup Without Deploy:**
+```bash
+# Edit config files as needed
+./bin/setup.sh --use-defaults     # Setup only, no deployment
+cd infra && cdk deploy            # Deploy manually later
+```
 
 The script automatically:
-- Discovers your Canvas models and endpoints
 - Sets up Python environment and dependencies
-- Creates configuration files
 - Builds Lambda layer packages
 - Bootstraps CDK and synthesizes templates
 - Optionally deploys infrastructure (with `--deploy` flag)
+
+**Note:** Canvas model discovery is no longer automatic. You'll need to update the Canvas model ID in your configuration file after creating your model following the blog post instructions.
 
 ## Data File Setup
 
@@ -123,7 +156,7 @@ Before deployment, you must provide your air quality dataset:
 
 ### Alternative Approaches
 - **Deploy First**: Deploy infrastructure, then add data file and run database initialization Lambda
-- **Custom Filename**: Configure different filename during setup
+- **Custom Filename**: Configure different filename in `pre-deployment-config.ini` during setup
 
 For detailed format requirements, see `infra/data/README.md` after running setup.
 
@@ -139,20 +172,17 @@ Canvas model creation is a **separate manual step** that must be done following 
    - This includes data preparation, model training, and deployment steps
    - The blog post provides step-by-step guidance with screenshots
 3. **Update Configuration**: 
-   - Run `./bin/setup.sh` again to update the model ID
+   - Edit `infra/scripts/post-deployment-config.ini` with your Canvas model ID
    - Re-deploy with `cd infra && cdk deploy`
 
-### Auto-Discovery
+### Configuration Management
 
-The setup script will automatically attempt to discover your Canvas models. If no models are found:
-- The script will use a placeholder model ID
-- You can complete the infrastructure deployment
+The setup script uses configuration files instead of auto-discovery:
+- The script uses a placeholder Canvas model ID initially
+- You can complete the infrastructure deployment with the placeholder
 - Follow the blog post to create your Canvas model
-- Re-run the setup to update the configuration
+- Update the configuration file with your actual model ID and re-deploy
 
-### Manual Configuration
-
-If auto-discovery fails, you can find your Canvas model ID manually in the SageMaker Canvas console as described in the blog post.
 
 ## Deployment
 
@@ -201,8 +231,10 @@ The cleanup script removes:
 
 ### Common Issues
 
-**Setup Script Stuck at Prompt:**
-- Press Enter to use default values
+**Setup Script Issues:**
+- Configuration files must be present in `infra/scripts/` directory
+- The script requires both `pre-deployment-config.ini` and `post-deployment-config.ini` files
+- To modify parameters, edit the configuration files and re-run the script
 - Use `./bin/setup.sh --use-defaults` for non-interactive setup
 
 **CDK Deployment Errors:**
@@ -215,11 +247,11 @@ The cleanup script removes:
 - Check CSV format matches required headers
 - Ensure UTF-8 encoding and timezone in timestamps
 
-**Canvas Model Discovery:**
-- The setup script automatically discovers your Canvas models
-- If no models are found, a placeholder ID is used for initial deployment
+**Canvas Model Configuration:**
+- Canvas model creation is no longer automatic
+- The setup script uses configuration files with placeholder model IDs
+- Update `infra/scripts/post-deployment-config.ini` with your actual Canvas model ID after creating it
 - Follow the blog post to create your Canvas model after infrastructure deployment
-- Re-run setup script to update the model ID and re-deploy
 
 ### Getting Help
 - Check CloudWatch logs for Lambda function errors

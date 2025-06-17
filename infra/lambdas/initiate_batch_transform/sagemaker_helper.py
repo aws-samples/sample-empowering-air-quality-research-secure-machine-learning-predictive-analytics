@@ -11,12 +11,20 @@ import time
 import json
 import pandas as pd
 import io
+import ast
 from utils_helper import get_env, get_logger
 from botocore.exceptions import ClientError
 
 logger = get_logger(service="sagemaker_helper", level="debug")
 sagemaker_client = boto3.client("sagemaker")
 runtime_client = boto3.client("runtime.sagemaker")
+
+# Configuration parameters from environment variables
+BATCH_TRANSFORM_INSTANCE_TYPE = get_env("BATCH_TRANSFORM_INSTANCE_TYPE", "ml.m5.xlarge")
+BATCH_TRANSFORM_INSTANCE_COUNT = int(get_env("BATCH_TRANSFORM_INSTANCE_COUNT", "1"))
+BATCH_TRANSFORM_MAX_WAIT_TIME = int(get_env("BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS", "900"))
+BATCH_TRANSFORM_CHECK_INTERVAL = int(get_env("BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS", "10"))
+ATTRIBUTES_FOR_PREDICTION = get_env("ATTRIBUTES_FOR_PREDICTION", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")
 
 class SageMakerHelper:
     
@@ -34,7 +42,7 @@ class SageMakerHelper:
         return response
     
     @staticmethod
-    def run_batch_prediction(model_id, input_location, output_location, instance_type="ml.m5.xlarge", instance_count=1):
+    def run_batch_prediction(model_id, input_location, output_location, instance_type=None, instance_count=None):
         """
         Run batch predictions using a SageMaker model
         
@@ -42,8 +50,8 @@ class SageMakerHelper:
             model_id (str): The SageMaker model name
             input_location (str): S3 location of input data (s3://bucket/prefix/file.csv)
             output_location (str): S3 location for output data (s3://bucket/prefix)
-            instance_type (str, optional): Instance type for batch transform. Defaults to "ml.m5.xlarge".
-            instance_count (int, optional): Number of instances. Defaults to 1.
+            instance_type (str, optional): Instance type for batch transform. If None, uses environment variable.
+            instance_count (int, optional): Number of instances. If None, uses environment variable.
             
         Returns:
             dict: Response containing batch transform job details
@@ -52,6 +60,12 @@ class SageMakerHelper:
         logger.debug(f"Starting batch prediction for model: {model_id}")
         logger.debug(f"Input location: {input_location}")
         logger.debug(f"Output location: {output_location}")
+        
+        # Use environment variables if parameters not provided
+        final_instance_type = instance_type or BATCH_TRANSFORM_INSTANCE_TYPE
+        final_instance_count = instance_count or BATCH_TRANSFORM_INSTANCE_COUNT
+        
+        logger.info(f"Using instance type: {final_instance_type}, instance count: {final_instance_count}")
         
         try:
             # Generate a unique job name
@@ -78,8 +92,8 @@ class SageMakerHelper:
                     'AssembleWith': 'None'
                 },
                 TransformResources={
-                    'InstanceType': instance_type,
-                    'InstanceCount': instance_count
+                    'InstanceType': final_instance_type,
+                    'InstanceCount': final_instance_count
                 }
             )
             
@@ -89,6 +103,8 @@ class SageMakerHelper:
                 'TransformJobName': job_name,
                 'ModelName': model_id,
                 'TransformJobArn': response.get('TransformJobArn'),
+                'InstanceType': final_instance_type,
+                'InstanceCount': final_instance_count,
                 'ExecutionTime': time.time() - start_time
             }
             
@@ -177,34 +193,87 @@ class SageMakerHelper:
                 logger.error(f"Error checking model existence: {str(e)}")
                 raise
     @staticmethod
-    def wait_for_batch_job(job_name, max_wait_time=900, check_interval=10):
+    def wait_for_batch_job(job_name, max_wait_time=None, check_interval=None):
         """
         Wait for a batch transform job to complete
         
         Args:
             job_name (str): Name of the batch transform job
-            max_wait_time (int): Maximum time to wait in seconds
-            check_interval (int): Time between status checks in seconds
+            max_wait_time (int, optional): Maximum time to wait in seconds. If None, uses environment variable.
+            check_interval (int, optional): Time between status checks in seconds. If None, uses environment variable.
             
         Returns:
             str: Final job status
         """
+        # Use environment variables if parameters not provided
+        final_max_wait_time = max_wait_time or BATCH_TRANSFORM_MAX_WAIT_TIME
+        final_check_interval = check_interval or BATCH_TRANSFORM_CHECK_INTERVAL
+        
+        logger.info(f"Waiting for job {job_name} with max_wait_time={final_max_wait_time}s, check_interval={final_check_interval}s")
+        
         start_time = time.time()
         elapsed_time = 0
         
-        while elapsed_time < max_wait_time:
+        while elapsed_time < final_max_wait_time:
             job_info = SageMakerHelper.get_batch_prediction_status(job_name)
             status = job_info.get('Status')
             
             if status.upper() in ['COMPLETED', 'FAILED', 'STOPPED']:
+                logger.info(f"Job {job_name} completed with status: {status}")
                 return status
                 
-            logger.debug(f"Job status: {status}, waiting {check_interval} seconds...")
-            time.sleep(check_interval)
+            logger.debug(f"Job status: {status}, waiting {final_check_interval} seconds...")
+            time.sleep(final_check_interval)
             elapsed_time = time.time() - start_time
         
-        logger.warning(f"Job {job_name} did not complete within {max_wait_time} seconds")
+        logger.warning(f"Job {job_name} did not complete within {final_max_wait_time} seconds")
         return "TIMED_OUT"
+        
+    @staticmethod
+    def get_prediction_attributes():
+        """
+        Get the list of attributes to use for prediction from environment variable
+        
+        Returns:
+            list: List of attribute names for prediction
+        """
+        try:
+            if isinstance(ATTRIBUTES_FOR_PREDICTION, str):
+                attributes = ast.literal_eval(ATTRIBUTES_FOR_PREDICTION)
+            else:
+                attributes = ATTRIBUTES_FOR_PREDICTION
+            logger.debug(f"Using prediction attributes from config: {attributes}")
+            return attributes
+        except (ValueError, SyntaxError) as e:
+            logger.warning(f"Failed to parse ATTRIBUTES_FOR_PREDICTION: {e}. Using default.")
+            default_attributes = ['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']
+            return default_attributes
+    
+    @staticmethod
+    def prepare_prediction_data(df):
+        """
+        Prepare data for prediction using configured attributes from environment variable
+        
+        Args:
+            df (DataFrame): Input dataframe
+            
+        Returns:
+            DataFrame: Prepared dataframe with only prediction attributes
+        """
+        required_columns = SageMakerHelper.get_prediction_attributes()
+        
+        # Check if all required columns exist
+        missing_columns = set(required_columns) - set(df.columns)
+        if missing_columns:
+            error_message = f"Missing required columns in input data: {missing_columns}"
+            logger.error(error_message)
+            raise Exception(error_message)
+
+        # Create input dataframe with only the required columns
+        input_df = df[required_columns]
+        logger.info(f"Using {len(required_columns)} columns for prediction: {required_columns}")
+        
+        return input_df
         
     @staticmethod
     def process_batch_results(job_name, original_df, output_prefix, output_file_name, source_bucket):

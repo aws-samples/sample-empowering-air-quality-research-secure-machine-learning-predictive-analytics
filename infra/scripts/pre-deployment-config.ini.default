@@ -1,4 +1,0 @@
-[defaults]
-initial_data_file = init_data.csv
-project_prefix = demoapp
-aq_parameter_prediction = PM 2.5

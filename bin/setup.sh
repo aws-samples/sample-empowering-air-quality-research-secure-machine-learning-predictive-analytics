@@ -12,14 +12,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Default values
-DEFAULT_PROJECT_PREFIX="demoapp"
-DEFAULT_DATA_FILE="init_data.csv"
-DEFAULT_AQ_PARAMETER="PM 2.5"
-
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Configuration variables to store parameters dynamically
+PRE_DEPLOYMENT_KEYS=()
+PRE_DEPLOYMENT_VALUES=()
+POST_DEPLOYMENT_KEYS=()
+POST_DEPLOYMENT_VALUES=()
+ALL_CONFIG_KEYS=()
+ALL_CONFIG_VALUES=()
 
 # Parse command line arguments
 USE_DEFAULTS=false
@@ -61,10 +64,14 @@ if [ "$HELP" = true ]; then
     echo "  --deploy, -d           Deploy the CDK stack after setup (default: only synth)"
     echo "  --help, -h             Show this help message"
     echo
-    echo -e "${GREEN}Default Values:${NC}"
-    echo "  Project Prefix:        $DEFAULT_PROJECT_PREFIX"
-    echo "  Data File:             $DEFAULT_DATA_FILE"
-    echo "  AQ Parameter:          $DEFAULT_AQ_PARAMETER"
+    echo -e "${GREEN}Prerequisites:${NC}"
+    echo "  1. Configuration files must be present:"
+    echo "     • infra/scripts/pre-deployment-config.ini"
+    echo "     • infra/scripts/post-deployment-config.ini"
+    echo "  2. Place your data file at: infra/data/[filename].csv"
+    echo
+    echo -e "${GREEN}Configuration:${NC}"
+    echo "  Values are read from the provided configuration files"
     echo
     echo -e "${GREEN}Examples:${NC}"
     echo "  ./bin/setup.sh                     # Interactive setup (synth only)"
@@ -89,95 +96,203 @@ else
     echo
 fi
 
-# Function to prompt for input with default
-prompt_with_default() {
-    local prompt="$1"
-    local default="$2"
-    local result
+# Helper function to get value by key from arrays
+get_config_value() {
+    local key="$1"
+    local array_prefix="$2"  # Either "PRE_DEPLOYMENT" or "POST_DEPLOYMENT" or "ALL_CONFIG"
     
-    if [ "$USE_DEFAULTS" = true ]; then
-        # Non-interactive: clean output to stderr, return clean value
-        echo -e "${GREEN}✓ $prompt: $default${NC}" >&2
-        echo "$default"
-        return
+    # Use eval to access the arrays dynamically
+    local keys_array="${array_prefix}_KEYS[@]"
+    local values_array="${array_prefix}_VALUES[@]"
+    
+    eval "local keys=(\"\${$keys_array}\")"
+    eval "local values=(\"\${$values_array}\")"
+    
+    for i in "${!keys[@]}"; do
+        if [ "${keys[$i]}" = "$key" ]; then
+            echo "${values[$i]}"
+            return 0
+        fi
+    done
+    echo ""
+}
+
+# Function to read all parameters from config files dynamically
+read_default_config() {
+    local pre_config_file="$PROJECT_ROOT/infra/scripts/pre-deployment-config.ini"
+    local post_config_file="$PROJECT_ROOT/infra/scripts/post-deployment-config.ini"
+    
+    # Check if config files exist
+    if [[ ! -f "$pre_config_file" || ! -f "$post_config_file" ]]; then
+        echo -e "${RED}❌ Configuration files not found!${NC}"
+        echo
+        echo -e "${YELLOW}Required configuration files:${NC}"
+        echo -e "  • ${BLUE}$pre_config_file${NC}"
+        echo -e "  • ${BLUE}$post_config_file${NC}"
+        echo
+        echo -e "${RED}These files should be provided by the stack.${NC}"
+        echo -e "${YELLOW}Please ensure the configuration files are present before running setup.${NC}"
+        exit 1
     fi
     
-    # Interactive: detailed prompts to stderr, return clean value
-    echo >&2
-    echo -e "${YELLOW}$prompt${NC}" >&2
-    echo -e "${BLUE}Default value: ${GREEN}$default${NC}" >&2
-    echo -e "${BLUE}Instructions: Type your value and press Enter, or just press Enter to use the default${NC}" >&2
-    echo -n "> " >&2
-    read -r result
+    # Clear existing configurations
+    PRE_DEPLOYMENT_KEYS=()
+    PRE_DEPLOYMENT_VALUES=()
+    POST_DEPLOYMENT_KEYS=()
+    POST_DEPLOYMENT_VALUES=()
+    ALL_CONFIG_KEYS=()
+    ALL_CONFIG_VALUES=()
     
-    if [ -z "$result" ]; then
-        echo -e "${GREEN}Using default: $default${NC}" >&2
-        echo "$default"
+    # Read pre-deployment config file
+    if [ -f "$pre_config_file" ]; then
+        if [ "$USE_DEFAULTS" = false ]; then
+            echo "Reading pre-deployment configuration from: $pre_config_file" >&2
+        fi
+        while IFS='=' read -r key value; do
+            # Skip empty lines and comments
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            # Skip section headers like [defaults]
+            [[ "$key" =~ ^\[.*\]$ ]] && continue
+            
+            # Clean up key and value (remove leading/trailing whitespace)
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            
+            if [ -n "$key" ]; then
+                PRE_DEPLOYMENT_KEYS+=("$key")
+                PRE_DEPLOYMENT_VALUES+=("$value")
+                ALL_CONFIG_KEYS+=("$key")
+                ALL_CONFIG_VALUES+=("$value")
+                if [ "$USE_DEFAULTS" = false ]; then
+                    echo "  Pre-deployment: $key = $value" >&2
+                fi
+            fi
+        done < "$pre_config_file"
     else
-        echo -e "${GREEN}Using: $result${NC}" >&2
-        echo "$result"
+        echo "Warning: Pre-deployment config file not found: $pre_config_file" >&2
+    fi
+    
+    # Read post-deployment config file
+    if [ -f "$post_config_file" ]; then
+        if [ "$USE_DEFAULTS" = false ]; then
+            echo "Reading post-deployment configuration from: $post_config_file" >&2
+        fi
+        while IFS='=' read -r key value; do
+            # Skip empty lines and comments
+            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+            # Skip section headers like [defaults]
+            [[ "$key" =~ ^\[.*\]$ ]] && continue
+            
+            # Clean up key and value (remove leading/trailing whitespace)
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            
+            if [ -n "$key" ]; then
+                POST_DEPLOYMENT_KEYS+=("$key")
+                POST_DEPLOYMENT_VALUES+=("$value")
+                ALL_CONFIG_KEYS+=("$key")
+                ALL_CONFIG_VALUES+=("$value")
+                if [ "$USE_DEFAULTS" = false ]; then
+                    echo "  Post-deployment: $key = $value" >&2
+                fi
+            fi
+        done < "$post_config_file"
+    else
+        echo "Warning: Post-deployment config file not found: $post_config_file" >&2
+    fi
+    
+    if [ "$USE_DEFAULTS" = false ]; then
+        echo "Total parameters loaded: ${#ALL_CONFIG_KEYS[@]}" >&2
     fi
 }
 
-# Function to discover Canvas models
-discover_canvas_models() {
-    if [ "$USE_DEFAULTS" = false ]; then
-        echo -e "${BLUE}🔍 Discovering your Canvas models...${NC}" >&2
+# Function to display configuration and ask for confirmation
+show_config_and_confirm() {
+    echo -e "${GREEN}📋 Default Configuration Parameters${NC}"
+    echo "=============================================="
+    
+    # Display pre-deployment parameters
+    if [ ${#PRE_DEPLOYMENT_KEYS[@]} -gt 0 ]; then
+        echo -e "${BLUE}Pre-deployment Configuration:${NC}"
+        for i in "${!PRE_DEPLOYMENT_KEYS[@]}"; do
+            echo -e "  ${PRE_DEPLOYMENT_KEYS[$i]}: ${BLUE}${PRE_DEPLOYMENT_VALUES[$i]}${NC}"
+        done
+        echo
     fi
     
-    # Try to use Python discovery script
-    local discovered_model
-    discovered_model=$(python3 "$PROJECT_ROOT/infra/scripts/discover_canvas.py" models 2>/dev/null || echo "")
+    # Display post-deployment parameters
+    if [ ${#POST_DEPLOYMENT_KEYS[@]} -gt 0 ]; then
+        echo -e "${BLUE}Post-deployment Configuration:${NC}"
+        for i in "${!POST_DEPLOYMENT_KEYS[@]}"; do
+            echo -e "  ${POST_DEPLOYMENT_KEYS[$i]}: ${BLUE}${POST_DEPLOYMENT_VALUES[$i]}${NC}"
+        done
+        echo
+    fi
     
-    if [ -n "$discovered_model" ]; then
-        if [ "$USE_DEFAULTS" = false ]; then
-            echo -e "${GREEN}✅ Found Canvas model: $discovered_model${NC}" >&2
-        fi
-        echo "$discovered_model"
+    if [ ${#ALL_CONFIG_KEYS[@]} -eq 0 ]; then
+        echo -e "${RED}❌ No configuration parameters found!${NC}"
+        echo -e "${YELLOW}Please ensure the configuration files exist and contain valid parameters.${NC}"
+        return 1
+    fi
+    
+    echo -e "${YELLOW}These are the default parameters that will be used for your deployment.${NC}"
+    echo
+    echo -e "${BLUE}💡 To modify these parameters:${NC}"
+    echo -e "   1. Edit the configuration files:"
+    echo -e "      • ${YELLOW}infra/scripts/pre-deployment-config.ini${NC} (for basic config)"
+    echo -e "      • ${YELLOW}infra/scripts/post-deployment-config.ini${NC} (for Canvas model)"
+    echo -e "   2. Add new parameters using the format: ${YELLOW}parameter_name = value${NC}"
+    echo -e "   3. Re-run this setup script: ${YELLOW}./bin/setup.sh${NC}"
+    echo
+    
+    if [ "$USE_DEFAULTS" = true ]; then
+        echo -e "${GREEN}✅ Using default configuration (non-interactive mode)${NC}"
         return 0
     fi
     
-    if [ "$USE_DEFAULTS" = false ]; then
-        echo -e "${YELLOW}⚠️  No Canvas models found${NC}" >&2
-        echo -e "${YELLOW}📋 Canvas Model Setup Required:${NC}" >&2
-        echo "   1. Complete this infrastructure deployment first" >&2
-        echo "   2. Follow the blog post to create and deploy your Canvas model:" >&2
-        echo "      • See the detailed Canvas setup instructions in the blog post" >&2
-        echo "      • This includes data preparation, model training, and deployment" >&2
-        echo "   3. Re-run this setup script to configure the model ID" >&2
-        echo "   4. Re-deploy the infrastructure with: cd infra && cdk deploy" >&2
-        echo >&2
-        echo -e "${BLUE}💡 For now, we'll use a placeholder model ID${NC}" >&2
-        echo >&2
+    read -p "Do you want to continue with these default parameters? (Y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        echo
+        echo -e "${YELLOW}Setup cancelled.${NC}"
+        echo -e "${BLUE}To modify the parameters:${NC}"
+        echo -e "   1. Edit the configuration files:"
+        echo -e "      • ${YELLOW}infra/scripts/pre-deployment-config.ini${NC}"
+        echo -e "      • ${YELLOW}infra/scripts/post-deployment-config.ini${NC}"
+        echo -e "   2. Re-run: ${YELLOW}./bin/setup.sh${NC}"
+        echo
+        exit 1
     fi
-    echo "canvas-model-placeholder-update-after-training"  # Placeholder that's clearly identifiable
+    
+    echo -e "${GREEN}✅ Proceeding with default configuration${NC}"
+    return 0
 }
 
-echo -e "${GREEN}📋 Step 1: Basic Configuration${NC}"
-if [ "$USE_DEFAULTS" = true ]; then
-    echo "Using default values for basic configuration."
-else
-    echo "Let's configure your air quality ML system with some basic settings."
-    echo -e "${BLUE}💡 Tip: You can press Enter to use default values, or use --use-defaults flag for non-interactive setup${NC}"
-fi
-echo
-
-# Get basic configuration
-PROJECT_PREFIX=$(prompt_with_default "Enter project prefix (used for resource naming):" "$DEFAULT_PROJECT_PREFIX")
-PROJECT_PREFIX=$(echo "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]')  # Convert to lowercase
-
-DATA_FILE=$(prompt_with_default "Enter your initial data filename:" "$DEFAULT_DATA_FILE")
-
+# Read default configuration from file
 if [ "$USE_DEFAULTS" = false ]; then
-    echo
-    echo -e "${BLUE}Available air quality parameters (common examples):${NC}"
-    echo "  • PM 10   - Particulate matter 10 micrometers"
-    echo "  • PM 1    - Particulate matter 1 micrometer" 
-    echo "  • PM 2.5  - Particulate matter 2.5 micrometers"
-    echo "  • Temperature, Humidity, CO2, etc. - Any measurement type"
-    echo
+    echo "Loading configuration from default files..."
 fi
-AQ_PARAMETER=$(prompt_with_default "Enter the parameter for ML prediction (can be any measurement type):" "$DEFAULT_AQ_PARAMETER")
+read_default_config
+
+echo -e "${GREEN}📋 Step 1: Configuration Review${NC}"
+show_config_and_confirm
+
+# Extract commonly used values for backward compatibility
+# These can be accessed by other parts of the script that expect specific variable names
+PROJECT_PREFIX=$(get_config_value "project_prefix" "ALL_CONFIG")
+PROJECT_PREFIX=${PROJECT_PREFIX:-demoapp}
+
+DATA_FILE=$(get_config_value "initial_data_file" "ALL_CONFIG")
+DATA_FILE=${DATA_FILE:-init_data.csv}
+
+AQ_PARAMETER=$(get_config_value "aq_parameter_prediction" "ALL_CONFIG")
+AQ_PARAMETER=${AQ_PARAMETER:-"PM 2.5"}
+
+CANVAS_MODEL_ID=$(get_config_value "aq_canvas_model_id" "ALL_CONFIG")
+CANVAS_MODEL_ID=${CANVAS_MODEL_ID:-canvas-model-placeholder-update-after-training}
+
+# Convert project prefix to lowercase
+PROJECT_PREFIX=$(echo "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]')
 
 echo
 echo -e "${GREEN}🔧 Step 2: Environment Setup${NC}"
@@ -212,43 +327,7 @@ else
 fi
 
 echo
-echo -e "${GREEN}📋 Step 3: Canvas Model Discovery${NC}"
-if [ "$USE_DEFAULTS" = true ]; then
-    echo "Auto-discovering Canvas models..."
-else
-    echo "Now let's find your SageMaker Canvas model."
-    echo -e "${BLUE}💡 Note: Canvas model creation is a separate manual step${NC}"
-fi
-echo
-
-# Auto-discover Canvas models (now with proper Python environment)
-DISCOVERED_MODEL=$(discover_canvas_models)
-
-echo
-CANVAS_MODEL_ID=$(prompt_with_default "Enter your Canvas Model ID:" "$DISCOVERED_MODEL")
-
-echo
-echo -e "${GREEN}📋 Step 4: Configuration Summary${NC}"
-echo "=============================================="
-echo -e "Project Prefix:     ${BLUE}$PROJECT_PREFIX${NC}"
-echo -e "Data File:          ${BLUE}$DATA_FILE${NC}"
-echo -e "AQ Parameter:       ${BLUE}$AQ_PARAMETER${NC}"
-echo -e "Canvas Model ID:    ${BLUE}$CANVAS_MODEL_ID${NC}"
-echo
-
-if [ "$USE_DEFAULTS" = false ]; then
-    read -p "Continue with this configuration? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Setup cancelled.${NC}"
-        exit 1
-    fi
-else
-    echo -e "${GREEN}✅ Using configuration above (non-interactive mode)${NC}"
-fi
-
-echo
-echo -e "${GREEN}📦 Step 5: Building Lambda Packages${NC}"
+echo -e "${GREEN}📦 Step 2: Building Lambda Packages${NC}"
 echo "Preparing Lambda layer packages..."
 
 # Build Lambda layer packages
@@ -293,23 +372,23 @@ cd "$PROJECT_ROOT"
 echo "✅ Lambda packages built successfully"
 
 echo
-echo -e "${GREEN}📝 Step 6: Creating Configuration Files${NC}"
+echo -e "${GREEN}📝 Step 3: Validating Configuration Files${NC}"
 
-# Create pre-deployment config
-cat > "$PROJECT_ROOT/infra/scripts/pre-deployment-config.ini" << EOF
-[defaults]
-initial_data_file = $DATA_FILE
-project_prefix = $PROJECT_PREFIX
-aq_parameter_prediction = $AQ_PARAMETER
-EOF
+# Check if config files exist and are readable
+PRE_CONFIG_FILE="$PROJECT_ROOT/infra/scripts/pre-deployment-config.ini"
+POST_CONFIG_FILE="$PROJECT_ROOT/infra/scripts/post-deployment-config.ini"
 
-# Create post-deployment config
-cat > "$PROJECT_ROOT/infra/scripts/post-deployment-config.ini" << EOF
-[defaults]
-canvas_model_id = $CANVAS_MODEL_ID
-EOF
-
-echo "✅ Configuration files created"
+if [[ -f "$PRE_CONFIG_FILE" && -f "$POST_CONFIG_FILE" ]]; then
+    echo "✅ Configuration files found:"
+    echo "  • pre-deployment-config.ini"
+    echo "  • post-deployment-config.ini"
+    echo
+    echo "Using configuration from these files."
+else
+    echo -e "${RED}❌ Configuration files missing!${NC}"
+    echo "This should not happen as they were validated earlier."
+    exit 1
+fi
 
 # Ensure data directory exists
 echo
@@ -326,7 +405,7 @@ else
 fi
 
 echo
-echo -e "${GREEN}🏗️  Step 6: CDK Setup${NC}"
+echo -e "${GREEN}🏗️  Step 4: CDK Setup${NC}"
 if [ "$DEPLOY" = true ]; then
     echo "Preparing AWS CDK and deploying stack..."
 else

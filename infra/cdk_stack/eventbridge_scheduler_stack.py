@@ -39,6 +39,35 @@ class EventBridgeSchedulerStack(NestedStack):
             )
         )
 
+        # Get schedule configuration from config
+        schedule_hours = int(config.get("batch_transform_schedule_in_hours", "24"))
+        
+        # Generate cron expression based on schedule hours
+        if schedule_hours == 24:
+            # Daily at midnight UTC
+            schedule_expression = "cron(0 0 * * ? *)"
+        elif schedule_hours == 12:
+            # Every 12 hours (midnight and noon UTC)
+            schedule_expression = "cron(0 0,12 * * ? *)"
+        elif schedule_hours == 8:
+            # Every 8 hours (midnight, 8am, 4pm UTC)
+            schedule_expression = "cron(0 0,8,16 * * ? *)"
+        elif schedule_hours == 6:
+            # Every 6 hours (midnight, 6am, noon, 6pm UTC)
+            schedule_expression = "cron(0 0,6,12,18 * * ? *)"
+        elif schedule_hours == 4:
+            # Every 4 hours
+            schedule_expression = "cron(0 0,4,8,12,16,20 * * ? *)"
+        elif schedule_hours == 2:
+            # Every 2 hours
+            schedule_expression = "cron(0 0,2,4,6,8,10,12,14,16,18,20,22 * * ? *)"
+        elif schedule_hours == 1:
+            # Every hour
+            schedule_expression = "cron(0 * * * ? *)"
+        else:
+            # For other values, use rate expression
+            schedule_expression = f"rate({schedule_hours} hours)"
+
         # Schedule
         self.schedule = scheduler.CfnSchedule(
             self,
@@ -46,7 +75,7 @@ class EventBridgeSchedulerStack(NestedStack):
             flexible_time_window=scheduler.CfnSchedule.FlexibleTimeWindowProperty(
                 mode="FLEXIBLE", maximum_window_in_minutes=60
             ),
-            schedule_expression="cron(0 0 * * ? *)",  # Run at midnight UTC every day
+            schedule_expression=schedule_expression,
             target=scheduler.CfnSchedule.TargetProperty(
                 arn=state_machine.state_machine_arn,
                 role_arn=self.scheduler_role.role_arn,
@@ -58,7 +87,7 @@ class EventBridgeSchedulerStack(NestedStack):
                             "service": "demo_workflow",
                         },
                         "parameters": {
-                            "duration_hours": 24,
+                            "duration_hours": schedule_hours,
                         },
                     }
                 ),
@@ -68,7 +97,7 @@ class EventBridgeSchedulerStack(NestedStack):
                 ),
             ),
             name=f"{project_prefix}-scheduler",
-            description="Invokes step functions workflow daily",
+            description=f"Invokes step functions workflow every {schedule_hours} hours",
             state="ENABLED",
         )
 
