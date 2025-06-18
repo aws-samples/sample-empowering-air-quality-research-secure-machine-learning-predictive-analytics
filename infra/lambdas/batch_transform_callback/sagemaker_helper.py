@@ -24,7 +24,7 @@ BATCH_TRANSFORM_INSTANCE_TYPE = get_env("BATCH_TRANSFORM_INSTANCE_TYPE", "ml.m5.
 BATCH_TRANSFORM_INSTANCE_COUNT = int(get_env("BATCH_TRANSFORM_INSTANCE_COUNT", "1"))
 BATCH_TRANSFORM_MAX_WAIT_TIME = int(get_env("BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS", "900"))
 BATCH_TRANSFORM_CHECK_INTERVAL = int(get_env("BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS", "10"))
-ATTRIBUTES_FOR_PREDICTION = get_env("ATTRIBUTES_FOR_PREDICTION", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")
+ATTRIBUTES_FOR_PREDICTION = get_env("ATTRIBUTES_FOR_PREDICTION", "['timestamp', 'parameter', 'device_id', 'location_id', 'deployment_date']")
 
 class SageMakerHelper:
     
@@ -246,7 +246,7 @@ class SageMakerHelper:
             return attributes
         except (ValueError, SyntaxError) as e:
             logger.warning(f"Failed to parse ATTRIBUTES_FOR_PREDICTION: {e}. Using default.")
-            default_attributes = ['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']
+            default_attributes = ['timestamp', 'parameter', 'device_id', 'location_id', 'deployment_date']
             return default_attributes
     
     @staticmethod
@@ -342,7 +342,17 @@ class SageMakerHelper:
         
         # Check if we have the right number of predictions
         if len(predictions_df) != len(original_df):
-            logger.warning(f"Prediction count ({len(predictions_df)}) doesn't match input count ({len(original_df)})")
+            logger.error(f"Prediction count ({len(predictions_df)}) doesn't match input count ({len(original_df)})")
+            logger.error(f"Original data shape: {original_df.shape}")
+            logger.error(f"Predictions shape: {predictions_df.shape}")
+            
+            # If predictions have more rows, take only the first N rows to match original data
+            if len(predictions_df) > len(original_df):
+                logger.warning(f"Truncating predictions from {len(predictions_df)} to {len(original_df)} rows")
+                predictions_df = predictions_df.head(len(original_df))
+            else:
+                # If predictions have fewer rows, this is a more serious issue
+                raise Exception(f"Insufficient predictions: got {len(predictions_df)}, expected {len(original_df)}")
         
         # Determine the prediction column name
         if len(predictions_df.columns) == 0:
@@ -354,10 +364,22 @@ class SageMakerHelper:
         # Create a copy of the original dataframe
         result_df = original_df.copy()
         
-        # Add the predictions
-        result_df['predicted_value'] = predictions_df[prediction_column].values
+        # Reset indices to ensure alignment
+        predictions_df = predictions_df.reset_index(drop=True)
+        result_df = result_df.reset_index(drop=True)
+        
+        # Add the predictions with proper alignment
+        try:
+            result_df['predicted_value'] = predictions_df[prediction_column].values
+            logger.debug(f"Successfully added {len(predictions_df)} predictions to {len(result_df)} rows")
+        except Exception as e:
+            logger.error(f"Error adding predictions: {str(e)}")
+            logger.error(f"Predictions shape: {predictions_df[prediction_column].values.shape}")
+            logger.error(f"Result dataframe shape: {result_df.shape}")
+            raise Exception(f"Failed to align predictions with original data: {str(e)}")
         
         # Add predicted_label column with TRUE value for all rows
         result_df['predicted_label'] = 'TRUE'
         
+        logger.info(f"Successfully processed batch results: {len(result_df)} rows with predictions")
         return result_df

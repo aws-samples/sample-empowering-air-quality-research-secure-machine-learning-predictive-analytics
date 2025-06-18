@@ -81,8 +81,8 @@ def lambda_handler(event, context):
                         "body": {
                             "message": "Batch transform completed successfully",
                             "batch_job_name": batch_job_name,
-                            "records_processed": result_data.get('records_processed', 0),
-                            "output_file": result_data.get('output_file'),
+                            "records": result_data.get('records_processed', 0),
+                            "key": result_data.get('output_file'),
                             "status": "COMPLETED"
                         }
                     })
@@ -154,8 +154,8 @@ def process_batch_results(job_metadata):
     
     # Process the batch transform results
     result_df = SageMakerHelper.process_batch_results(
-        batch_job_name=batch_job_name,
-        input_df=original_df,
+        job_name=batch_job_name,
+        original_df=original_df,
         output_prefix=output_batch_prefix,
         output_file_name=f"{batch_job_id}_{timestamp}.csv.out",
         source_bucket=SOURCE_BUCKET
