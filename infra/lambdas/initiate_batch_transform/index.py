@@ -159,7 +159,7 @@ def lambda_handler(event, context):
         # Start batch transform job
         logger.info(f"Starting batch transform job with model: {model_id}")
         batch_job = SageMakerHelper.run_batch_prediction(
-            model_id=CANVAS_MODEL_ID,
+            model_id=model_id,
             input_location=f"s3://{SOURCE_BUCKET}/{input_s3_key}",
             output_location=f"s3://{SOURCE_BUCKET}/{output_batch_prefix}"
         )

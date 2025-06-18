@@ -167,28 +167,91 @@ You have two options for providing your air quality dataset:
 
 For detailed format requirements, see `infra/data/README.md` after running setup.
 
-## SageMaker Canvas Configuration
+## Model Setup for Batch Inference
 
-### Canvas Model Creation (Required)
+After deploying your infrastructure, you need to create a SageMaker model for batch inference. You have two options:
 
-Canvas model creation is a **separate manual step** that must be done following the blog post instructions:
+### Option 1: Canvas Model (Recommended for Beginners)
 
-1. **Deploy Infrastructure First**: Run `./bin/setup.sh --use-defaults --deploy`
-2. **Create Canvas Model**:
-   - Follow the detailed Canvas setup instructions in the blog post
-   - This includes data preparation, model training, and deployment steps
-   - The blog post provides step-by-step guidance with screenshots
-3. **Update Configuration**: 
-   - Edit `infra/scripts/post-deployment-config.ini` with your Canvas model ID
-   - Re-deploy with `cd infra && cdk deploy`
+Follow the blog post instructions to create a Canvas model, then create a SageMaker model from it:
 
-### Configuration Management
+1. **Create Canvas Model**: Follow the detailed Canvas setup instructions in the blog post
+2. **Create SageMaker Model from Canvas**: Use the CLI commands below
+3. **Update Configuration**: Add the model ID to your config file
 
-The setup script uses configuration files instead of auto-discovery:
-- The script uses a placeholder Canvas model ID initially
-- You can complete the infrastructure deployment with the placeholder
-- Follow the blog post to create your Canvas model
-- Update the configuration file with your actual model ID and re-deploy
+### Option 2: Model Registry (Recommended for MLOps)
+
+If you have models in SageMaker Model Registry, create a SageMaker model from the latest approved version:
+
+1. **List Available Model Package Groups**:
+   ```bash
+   aws sagemaker list-model-package-groups --query 'ModelPackageGroupSummaryList[*].ModelPackageGroupName'
+   ```
+
+2. **Find Latest Approved Model Package**:
+   ```bash
+   # Replace 'your-model-package-group-name' with your actual group name
+   aws sagemaker list-model-packages \
+     --model-package-group-name your-model-package-group-name \
+     --model-package-type Versioned \
+     --model-approval-status Approved \
+     --sort-by CreationTime \
+     --sort-order Descending \
+     --max-results 1 \
+     --query 'ModelPackageSummaryList[0].ModelPackageArn'
+   ```
+
+3. **Create SageMaker Model from Model Package**:
+   ```bash
+   # Get your SageMaker execution role ARN (from CDK outputs)
+   SAGEMAKER_ROLE_ARN=$(aws cloudformation describe-stacks \
+     --stack-name YourStackName-SageMakerStack \
+     --query 'Stacks[0].Outputs[?OutputKey==`SageMakerExecutionRoleArn`].OutputValue' \
+     --output text)
+
+   # Create the model (replace MODEL_PACKAGE_ARN with the ARN from step 2)
+   aws sagemaker create-model \
+     --model-name "air-quality-batch-model-$(date +%Y%m%d)" \
+     --containers ModelPackageName=MODEL_PACKAGE_ARN \
+     --execution-role-arn $SAGEMAKER_ROLE_ARN
+   ```
+
+4. **Verify Model Creation**:
+   ```bash
+   # List your models to confirm creation
+   aws sagemaker list-models --name-contains "air-quality-batch" --query 'Models[*].[ModelName,CreationTime]' --output table
+   ```
+
+### Update Configuration
+
+After creating your model using either option:
+
+1. **Get Your Model Name**:
+   ```bash
+   # For Canvas models, the name is typically the Canvas model name
+   # For Registry models, use the name you specified in create-model command
+   ```
+
+2. **Update Configuration File**:
+   ```bash
+   # Edit the post-deployment config file
+   vim infra/scripts/post-deployment-config.ini
+   
+   # Update the model ID:
+   aq_canvas_model_id = your-actual-model-name
+   ```
+
+3. **Re-deploy with Updated Configuration**:
+   ```bash
+   cd infra && cdk deploy
+   ```
+
+### Model Management Tips
+
+- **Model Names**: Use descriptive names with dates (e.g., `air-quality-model-20241218`)
+- **Model Lifecycle**: Models are free to keep, but you can delete old ones to keep things organized
+- **Model Updates**: When you have a new model version, create a new SageMaker model and update the config
+- **Testing**: You can test your model using the AWS Console or CLI before updating the configuration
 
 
 ## Deployment
