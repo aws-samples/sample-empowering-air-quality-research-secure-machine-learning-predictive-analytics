@@ -20,7 +20,21 @@ def lambda_handler(event, context):
         # Get the file name from the event
         logger.debug(f"Received event: {json.dumps(event)}")
         
-        event_body = event.get("Payload", {}).get("body", {})
+        # Handle different event structures from Step Functions
+        event_body = None
+        if "input" in event and "body" in event["input"]:
+            # Step Functions passes data in "input" field
+            event_body = event["input"]["body"]
+        elif "Payload" in event and "body" in event["Payload"]:
+            # Legacy format
+            event_body = event["Payload"]["body"]
+        elif "body" in event:
+            # Direct format
+            event_body = event["body"]
+        else:
+            logger.error(f"Could not find event body in event structure: {list(event.keys())}")
+            return {"statusCode": 400, "body": "Invalid event structure"}
+        
         if isinstance(event_body, str):
             event_body = json.loads(event_body)
         

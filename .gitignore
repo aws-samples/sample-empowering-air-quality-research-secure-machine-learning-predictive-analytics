@@ -6,8 +6,10 @@ __pycache__
 .pytest_cache
 infra/data/*
 !infra/data/.gitkeep
+!infra/data/README.md
 
 # CDK asset staging directory
 .cdk.staging
 infra/cdk.out/*
 infra/cdk.context.json
+q_developer_notes/*

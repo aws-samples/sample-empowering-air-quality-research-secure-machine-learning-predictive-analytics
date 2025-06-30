@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [V 1.0.0]
 
 ### Added
 - Initial project setup
@@ -24,3 +24,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+## [V 1.0.1]
+
+### Added
+- Configurable air quality parameter selection (PM 2.5, PM 10, PM 1, Temperature, Humidity, etc.) for targeted predictions
+- Comprehensive architecture documentation with interactive Mermaid diagrams
+- Step Functions timeout configuration with 1-hour step timeouts and 2-hour overall timeout
+- Parameter filtering in database queries for specific air quality parameters
+- Batch transform callback pattern for SageMaker job completion handling
+- Comprehensive error handling with specific failure states for different scenarios
+
+### Changed
+- Step Functions workflow to include proper error handling and timeout management
+- Lambda function timeouts: batch transform (15 minutes), others (2 minutes)
+- Database query logic to filter by configurable air quality parameter
+- Step Functions payload structure for better data flow between tasks
+- Architecture documentation structure with detailed component descriptions
+
+### Deprecated
+
+### Removed
+
+### Fixed
+- CDK bootstrap configuration issues preventing proper deployment
+- RDS IAM authentication problems with database connections
+- Lambda function import path issues causing module resolution errors
+- Python relative import problems in Lambda functions
+- Step Functions error handling preventing proper failure state transitions
+- Batch transform callback pattern issues causing workflow hanging
+- Lambda function payload parsing problems in Step Functions integration
+
+### Security
+- Implemented least privilege IAM roles for all components
+- Added proper error handling to prevent information leakage
+- Enhanced database credential management through AWS Secrets Manager

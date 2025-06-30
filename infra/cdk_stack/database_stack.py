@@ -27,12 +27,39 @@ class DatabaseStack(NestedStack):
         # Get the project prefix from config
         project_prefix = config.get("project_prefix", "demoapp")
 
+        # Get PostgreSQL version from config or use default
+        pg_version_config = config.get("rds_aurora_pg_version", "").strip()
+        if pg_version_config:
+            # Map version strings to CDK version objects
+            version_mapping = {
+                "16.4": rds.AuroraPostgresEngineVersion.VER_16_4,
+                "16.3": rds.AuroraPostgresEngineVersion.VER_16_3,
+                "16.2": rds.AuroraPostgresEngineVersion.VER_16_2,
+                "16.1": rds.AuroraPostgresEngineVersion.VER_16_1,
+                "15.8": rds.AuroraPostgresEngineVersion.VER_15_8,
+                "15.7": rds.AuroraPostgresEngineVersion.VER_15_7,
+                "15.6": rds.AuroraPostgresEngineVersion.VER_15_6,
+                "15.5": rds.AuroraPostgresEngineVersion.VER_15_5,
+                "15.4": rds.AuroraPostgresEngineVersion.VER_15_4,
+                "14.13": rds.AuroraPostgresEngineVersion.VER_14_13,
+                "14.12": rds.AuroraPostgresEngineVersion.VER_14_12,
+                "14.11": rds.AuroraPostgresEngineVersion.VER_14_11,
+                "14.10": rds.AuroraPostgresEngineVersion.VER_14_10,
+                "14.9": rds.AuroraPostgresEngineVersion.VER_14_9,
+            }
+            postgres_version = version_mapping.get(pg_version_config, rds.AuroraPostgresEngineVersion.VER_16_4)
+            if pg_version_config not in version_mapping:
+                print(f"Warning: PostgreSQL version '{pg_version_config}' not found in mapping. Using default 16.4")
+        else:
+            # Use default version if not specified
+            postgres_version = rds.AuroraPostgresEngineVersion.VER_16_4
+
         # Create RDS cluster with IAM authentication enabled
         self.aurora = rds.DatabaseCluster(
             self,
             f"{project_prefix}Cluster",
             engine=rds.DatabaseClusterEngine.aurora_postgres(
-                version=rds.AuroraPostgresEngineVersion.VER_16_4
+                version=postgres_version
             ),
             cluster_identifier=f"{project_prefix}-cluster",
             instances=2,

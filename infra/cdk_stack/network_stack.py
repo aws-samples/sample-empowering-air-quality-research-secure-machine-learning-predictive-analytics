@@ -106,6 +106,24 @@ class NetworkStack(NestedStack):
             security_groups=[self.secrets_manager_sg],
         )
 
+        # Add SSM VPC Endpoint for Parameter Store access
+        self.ssm_endpoint = self.vpc.add_interface_endpoint(
+            f"{project_prefix}SSMEndpoint",
+            service=ec2.InterfaceVpcEndpointAwsService.SSM,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            security_groups=[self.lambda_sg],
+        )
+
+        # Add Step Functions VPC Endpoint for task callbacks
+        self.step_functions_endpoint = self.vpc.add_interface_endpoint(
+            f"{project_prefix}StepFunctionsEndpoint",
+            service=ec2.InterfaceVpcEndpointAwsService.STEP_FUNCTIONS,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            security_groups=[self.lambda_sg],
+        )
+
         # Get database configuration from config
         rds_db_port = int(config.get("rds_db_port", 5432))
 
@@ -124,6 +142,39 @@ class NetworkStack(NestedStack):
 
         self.sagemaker_security_group.add_ingress_rule(
             self.lambda_sg, ec2.Port.tcp(443), "Allow HTTPS inbound from Lambda"
+        )
+
+        # Add HTTPS access from VPC CIDR (matches manually added rule)
+        self.sagemaker_security_group.add_ingress_rule(
+            ec2.Peer.ipv4("10.0.0.0/16"), 
+            ec2.Port.tcp(443), 
+            "from 10.0.0.0/16:443"
+        )
+
+        # Add self-referencing rules for SageMaker to resolve network connectivity issues
+        # between worker and leader nodes during batch transform jobs
+        self.sagemaker_security_group.add_ingress_rule(
+            self.sagemaker_security_group, 
+            ec2.Port.all_traffic(), 
+            "Allow all traffic from self (SageMaker nodes communication)"
+        )
+
+        # Add ESP protocol (IP protocol 50) for IPSec communication between SageMaker nodes
+        # Using CfnSecurityGroupIngress for protocols not directly supported by CDK
+        esp_rule = ec2.CfnSecurityGroupIngress(
+            self,
+            f"{project_prefix}SageMakerESPRule",
+            group_id=self.sagemaker_security_group.security_group_id,
+            source_security_group_id=self.sagemaker_security_group.security_group_id,
+            ip_protocol="50",
+            description="Allow ESP protocol from self (SageMaker IPSec communication)"
+        )
+
+        # Add UDP 500 for IKE (Internet Key Exchange) protocol used in IPSec
+        self.sagemaker_security_group.add_ingress_rule(
+            self.sagemaker_security_group,
+            ec2.Port.udp(500),
+            "Allow UDP 500 from self (SageMaker IKE protocol)"
         )
 
         # Add outputs with prefix

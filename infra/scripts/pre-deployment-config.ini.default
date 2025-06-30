@@ -1,3 +1,0 @@
-[defaults]
-initial_data_file = init_data.csv
-project_prefix = demoapp

@@ -5,6 +5,8 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_iam as iam,
+    aws_events as events,
+    aws_events_targets as events_targets,
     Duration,
     CfnOutput,
 )
@@ -52,12 +54,20 @@ class LambdaStack(NestedStack):
             description="IAM role for read-write access to the database",
         )
 
-        # Create a role for the make_inference Lambda
-        self.inference_role = iam.Role(
+        # Create separate roles for batch transform functions following least privilege principle
+        
+        # Role for InitiateBatchTransform Lambda
+        self.batch_initiate_role = iam.Role(
             self,
-            f"{project_prefix}InferenceRole",
+            f"{project_prefix}BatchInitiateRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="IAM role for the inference Lambda function",
+        )
+
+        # Role for BatchTransformCallback Lambda
+        self.batch_callback_role = iam.Role(
+            self,
+            f"{project_prefix}BatchCallbackRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
         )
 
         # Add permissions to the DB reader role
@@ -85,7 +95,8 @@ class LambdaStack(NestedStack):
             self.init_role,
             self.reader_role,
             self.writer_role,
-            self.inference_role,
+            self.batch_initiate_role,
+            self.batch_callback_role,
         ]:
             role.add_managed_policy(
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -122,26 +133,106 @@ class LambdaStack(NestedStack):
             )
         )
 
-        # Add specific S3 permissions to the inference role
-        self.inference_role.add_to_policy(
+        # Permissions for InitiateBatchTransform Lambda
+        # S3 permissions for reading input data and writing batch input files
+        self.batch_initiate_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    # Read permissions for retrieved_from_db prefix
-                    "s3:GetObject", 
+                    "s3:GetObject",
                     "s3:ListBucket",
-                    # Write permissions for predicted_values_output prefix
                     "s3:PutObject",
                     "s3:PutObjectAcl"
                 ],
                 resources=[
-                    # Read resources
                     source_bucket.bucket_arn,
-                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",
-                    # Write resources
-                    f"{source_bucket.bucket_arn}/predicted_values_output/*"
+                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",  # Read input data
+                    f"{source_bucket.bucket_arn}/input_batch/*",       # Write batch input
                 ]
             )
         )
+
+        # SageMaker permissions for batch transform job creation and model access
+        self.batch_initiate_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "sagemaker:CreateTransformJob",
+                    "sagemaker:DescribeModel",
+                    "sagemaker:DescribeTransformJob"
+                ],
+                resources=[
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{config.get('aq_canvas_model_id')}",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:transform-job/*"
+                ]
+            )
+        )
+
+        # Step Functions permissions for task callbacks
+        self.batch_initiate_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "states:SendTaskSuccess",
+                    "states:SendTaskFailure"
+                ],
+                resources=["*"]  # Step Functions requires wildcard for task tokens
+            )
+        )
+
+        # Parameter Store permissions for storing job metadata
+        self.batch_initiate_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "ssm:PutParameter"
+                ],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/batch-transform/*"
+                ]
+            )
+        )
+
+        # Permissions for BatchTransformCallback Lambda
+        # S3 permissions for reading batch results and writing final output
+        self.batch_callback_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                ],
+                resources=[
+                    source_bucket.bucket_arn,
+                    f"{source_bucket.bucket_arn}/input_batch/*",           # Read original input
+                    f"{source_bucket.bucket_arn}/output_batch/*",          # Read batch results
+                    f"{source_bucket.bucket_arn}/predicted_values_output/*" # Write final output
+                ]
+            )
+        )
+
+        # Step Functions permissions for task callbacks
+        self.batch_callback_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "states:SendTaskSuccess",
+                    "states:SendTaskFailure"
+                ],
+                resources=["*"]  # Step Functions requires wildcard for task tokens
+            )
+        )
+
+        # Parameter Store permissions for reading and cleaning up job metadata
+        self.batch_callback_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "ssm:GetParameter",
+                    "ssm:DeleteParameter"
+                ],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/batch-transform/*"
+                ]
+            )
+        )
+
+        # Remove the old inference role permissions (keep the role for backward compatibility but update its usage)
 
         # Add specific S3 permissions to the writer role for predicted_values_output prefix
         self.writer_role.add_to_policy(
@@ -151,16 +242,6 @@ class LambdaStack(NestedStack):
                     source_bucket.bucket_arn,
                     f"{source_bucket.bucket_arn}/predicted_values_output/*"
                 ]
-            )
-        )
-
-        # Add sagemaker permissions to the inference role
-        self.inference_role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["sagemaker:InvokeEndpoint"],
-                resources=[
-                    f"arn:aws:sagemaker:{self.region}:{self.account}:endpoint/{config.get('canvas_model_endpoint_name')}"
-                ],
             )
         )
 
@@ -185,9 +266,15 @@ class LambdaStack(NestedStack):
         )
         CfnOutput(
             self,
-            f"{project_prefix}InferenceRoleName",
-            value=self.inference_role.role_name,
-            export_name=f"{project_prefix}InferenceRoleName",
+            f"{project_prefix}BatchInitiateRoleName",
+            value=self.batch_initiate_role.role_name,
+            export_name=f"{project_prefix}BatchInitiateRoleName",
+        )
+        CfnOutput(
+            self,
+            f"{project_prefix}BatchCallbackRoleName",
+            value=self.batch_callback_role.role_name,
+            export_name=f"{project_prefix}BatchCallbackRoleName",
         )
 
         # Create Lambda layers
@@ -217,22 +304,12 @@ class LambdaStack(NestedStack):
             [lambda_sg],
             [common_shared_layer],
             self.get_query_env_variables(config, aurora, source_bucket),
-            Duration.seconds(30),
+            Duration.minutes(2),
             256,
             self.reader_role,  # Use reader role for querying
         )
 
-        self.make_inference_lambda = self.create_lambda_function(
-            "MakeInference",
-            "make_inference",
-            vpc,
-            [lambda_sg],
-            [lambda_power_tool_layer, pandas_layer],
-            self.get_inference_env_variables(config, aurora, source_bucket),
-            Duration.minutes(1),
-            512,
-            self.inference_role,  # Use the inference role
-        )
+
 
         self.write_results_function = self.create_lambda_function(
             "WriteResultsInDB",
@@ -241,19 +318,75 @@ class LambdaStack(NestedStack):
             [lambda_sg],
             [common_shared_layer],
             self.get_writer_env_variables(config, aurora, source_bucket),
-            Duration.seconds(30),
+            Duration.minutes(2),
             256,
             self.writer_role,  # Use writer role for writing results
+        )
+
+        # New batch transform Lambda functions with separate roles
+        self.initiate_batch_transform_lambda = self.create_lambda_function(
+            "InitiateBatchTransform",
+            "initiate_batch_transform",
+            vpc,
+            [lambda_sg],
+            [lambda_power_tool_layer, pandas_layer],
+            self.get_batch_transform_env_variables(config, aurora, source_bucket),
+            Duration.minutes(15),
+            512,
+            self.batch_initiate_role,  # Use dedicated batch initiate role
+        )
+
+        self.batch_transform_callback_lambda = self.create_lambda_function(
+            "BatchTransformCallback",
+            "batch_transform_callback",
+            vpc,
+            [lambda_sg],
+            [lambda_power_tool_layer, pandas_layer],
+            self.get_batch_callback_env_variables(config, aurora, source_bucket),
+            Duration.minutes(2),
+            512,
+            self.batch_callback_role,  # Use dedicated batch callback role
+        )
+
+        # Create EventBridge rule to trigger callback Lambda when SageMaker batch transform jobs complete
+        batch_transform_rule = events.Rule(
+            self,
+            f"{project_prefix}BatchTransformCompletionRule",
+            event_pattern=events.EventPattern(
+                source=["aws.sagemaker"],
+                detail_type=["SageMaker Transform Job State Change"],
+                detail={
+                    "TransformJobStatus": ["Completed", "Failed", "Stopped"]
+                }
+            ),
+            description="Triggers callback Lambda when SageMaker batch transform jobs complete"
+        )
+
+        # Add the callback Lambda as a target for the EventBridge rule
+        batch_transform_rule.add_target(
+            events_targets.LambdaFunction(self.batch_transform_callback_lambda)
+        )
+
+        # Grant EventBridge permission to invoke the callback Lambda
+        self.batch_transform_callback_lambda.add_permission(
+            f"{project_prefix}EventBridgeInvokePermission",
+            principal=iam.ServicePrincipal("events.amazonaws.com"),
+            action="lambda:InvokeFunction",
+            source_arn=batch_transform_rule.rule_arn
         )
 
         # Outputs
         CfnOutput(self, f"{project_prefix}DBInitLambdaName", value=self.db_init_lambda.function_name)
         CfnOutput(self, f"{project_prefix}QueryLambdaName", value=self.query_function.function_name)
-        CfnOutput(
-            self, f"{project_prefix}InferenceLambdaName", value=self.make_inference_lambda.function_name
-        )
+
         CfnOutput(
             self, f"{project_prefix}WriterLambdaName", value=self.write_results_function.function_name
+        )
+        CfnOutput(
+            self, f"{project_prefix}InitiateBatchTransformLambdaName", value=self.initiate_batch_transform_lambda.function_name
+        )
+        CfnOutput(
+            self, f"{project_prefix}BatchTransformCallbackLambdaName", value=self.batch_transform_callback_lambda.function_name
         )
 
         # Add CDK nag suppressions for this stack
@@ -262,7 +395,8 @@ class LambdaStack(NestedStack):
             self.init_role,
             self.reader_role,
             self.writer_role,
-            self.inference_role,
+            self.batch_initiate_role,
+            self.batch_callback_role,
         ]:
             NagSuppressions.add_resource_suppressions(
                 role,
@@ -308,13 +442,25 @@ class LambdaStack(NestedStack):
             ],
         )
 
+        # Add NAG suppressions for the new separate batch roles
         NagSuppressions.add_resource_suppressions_by_path(
             self,
-            f"/{self.node.path}/{project_prefix}InferenceRole/DefaultPolicy/Resource",
+            f"/{self.node.path}/{project_prefix}BatchInitiateRole/DefaultPolicy/Resource",
             [
                 {
                     "id": "AwsSolutions-IAM5",
-                    "reason": "Wildcard permissions are required for the application functionality and are scoped to specific resources",
+                    "reason": "Wildcard permissions are required for Step Functions task tokens and SageMaker transform jobs. Canvas model access is restricted to 'canvas-*' pattern for security.",
+                }
+            ],
+        )
+
+        NagSuppressions.add_resource_suppressions_by_path(
+            self,
+            f"/{self.node.path}/{project_prefix}BatchCallbackRole/DefaultPolicy/Resource",
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Wildcard permissions are required for Step Functions task tokens",
                 }
             ],
         )
@@ -341,7 +487,7 @@ class LambdaStack(NestedStack):
         )
 
         NagSuppressions.add_resource_suppressions(
-            self.make_inference_lambda,
+            self.write_results_function,
             [
                 {
                     "id": "AwsSolutions-L1",
@@ -351,7 +497,17 @@ class LambdaStack(NestedStack):
         )
 
         NagSuppressions.add_resource_suppressions(
-            self.write_results_function,
+            self.initiate_batch_transform_lambda,
+            [
+                {
+                    "id": "AwsSolutions-L1",
+                    "reason": "Lambda runtime versions are managed through the application lifecycle",
+                }
+            ],
+        )
+
+        NagSuppressions.add_resource_suppressions(
+            self.batch_transform_callback_lambda,
             [
                 {
                     "id": "AwsSolutions-L1",
@@ -428,7 +584,7 @@ class LambdaStack(NestedStack):
 
         env_vars.update(
             {
-                "LOG_LEVEL": config.get("lambda_logs_level", "INFO").upper(),
+                "LOG_LEVEL": config.get("log_level", "INFO").upper(),
                 "DB_DUMP_PREFIX": "initial_dataset",
                 "DB_DUMP_FILE": db_dump_file,
                 "SERVICE_NAME": "db_init_lambda",
@@ -446,24 +602,14 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "query_lambda",
                 "RETRIEVAL_PREFIX": "retrieved_from_db",
                 "DB_USERNAME": "reader_user",
                 "READER_ROLE_NAME": self.reader_role.role_name,
                 "AWS_ACCOUNT_ID": self.account,
-            }
-        )
-        return env_vars
-
-    def get_inference_env_variables(self, config, aurora, source_bucket):
-        env_vars = self.get_common_env_variables(config, aurora, source_bucket)
-        env_vars.update(
-            {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
-                "SERVICE_NAME": "make_inference_lambda",
-                "PREDICTED_PREFIX": "predicted_values_output",
-                "CANVAS_MODEL_ENDPOINT_NAME": str(config.get("canvas_model_endpoint_name", "")),
+                "AQ_PARAMETER_PREDICTION": str(config.get("aq_parameter_prediction", "PM 2.5")),
+                "MISSING_VALUE_PATTERN_MATCH": str(config.get("missing_value_pattern_match", "[65535]")),
             }
         )
         return env_vars
@@ -472,12 +618,50 @@ class LambdaStack(NestedStack):
         env_vars = self.get_common_env_variables(config, aurora, source_bucket)
         env_vars.update(
             {
-                "LOG_LEVEL": str(config.get("lambda_logs_level", "INFO")).upper(),
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "writer_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
                 "DB_USERNAME": "writer_user",
                 "WRITER_ROLE_NAME": self.writer_role.role_name,
                 "AWS_ACCOUNT_ID": self.account,
+            }
+        )
+        return env_vars
+
+    def get_batch_transform_env_variables(self, config, aurora, source_bucket):
+        env_vars = self.get_common_env_variables(config, aurora, source_bucket)
+        env_vars.update(
+            {
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
+                "SERVICE_NAME": "initiate_batch_transform_lambda",
+                "PREDICTED_PREFIX": "predicted_values_output",
+                "CANVAS_MODEL_ID": str(config.get("aq_canvas_model_id", "")),  # Updated to use aq_canvas_model_id
+                "BATCH_CALLBACK_FUNCTION_NAME": f"{config.get('project_prefix', 'demoapp')}-BatchTransformCallback",
+                
+                # New configurable batch transform parameters
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
+                "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
+                "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),
+                "BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS": str(config.get("batch_transform_check_interval_in_seconds", "10")),
+            }
+        )
+        return env_vars
+
+    def get_batch_callback_env_variables(self, config, aurora, source_bucket):
+        env_vars = self.get_common_env_variables(config, aurora, source_bucket)
+        env_vars.update(
+            {
+                "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
+                "SERVICE_NAME": "batch_transform_callback_lambda",
+                "PREDICTED_PREFIX": "predicted_values_output",
+                
+                # Add the same batch transform configuration parameters for consistency
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
+                "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
+                "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),
+                "BATCH_TRANSFORM_CHECK_INTERVAL_IN_SECONDS": str(config.get("batch_transform_check_interval_in_seconds", "10")),
             }
         )
         return env_vars
