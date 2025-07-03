@@ -24,7 +24,7 @@ if not project_root:
 
 # Load the pre-deployment configuration
 config = configparser.ConfigParser()
-config_path = os.path.join(project_root, "infra", "scripts", "pre-deployment-config.ini")
+config_path = os.path.join(project_root, "infra", "scripts", "config.ini")
 
 # Default project prefix if config file doesn't exist or doesn't contain the value
 default_project_prefix = "demoapp"

@@ -6,8 +6,8 @@ class ConfigReader:
     def __init__(self):
         self.pre_config = configparser.ConfigParser()
         self.post_config = configparser.ConfigParser()
-        self.pre_config_path = "scripts/pre-deployment-config.ini"
-        self.post_config_path = "scripts/post-deployment-config.ini"
+        self.pre_config_path = "scripts/config.ini"
+        self.post_config_path = "scripts/config.ini"
 
         # Read pre-deployment config
         if os.path.exists(self.pre_config_path):

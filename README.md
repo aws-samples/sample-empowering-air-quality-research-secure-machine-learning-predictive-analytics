@@ -95,11 +95,8 @@ cd sample-empowering-air-quality-research-secure-machine-learning-predictive-ana
 
 **Step 2: Customize Configuration (Optional)**
 ```bash
-# Edit basic settings
-vim infra/scripts/pre-deployment-config.ini
-
-# Edit Canvas model settings  
-vim infra/scripts/post-deployment-config.ini
+# Edit configuration settings (created from template on first run)
+vim infra/scripts/config.ini
 ```
 
 **Step 3: Add Your Data**
@@ -111,28 +108,28 @@ cp your-data.csv infra/data/init_data.csv
 **Step 4: Deploy**
 ```bash
 # Setup and deploy in one command
-./bin/setup.sh --use-defaults --deploy
+./bin/run.sh --use-defaults --deploy
 ```
 
-**Configuration Files:**
-The setup requires two configuration files that are provided with the stack:
-- `infra/scripts/pre-deployment-config.ini` (basic settings)
-- `infra/scripts/post-deployment-config.ini` (Canvas model)
+**Configuration File:**
+The setup uses a configuration template that is provided with the stack:
+- `infra/scripts/config.ini.default` (template with all settings)
+- `infra/scripts/config.ini` (created from template on first run)
 
-Edit these files as needed to customize your deployment.
+Edit the config.ini file as needed to customize your deployment.
 
 ### Alternative Setup Options
 
 **Interactive Setup:**
 ```bash
 # Edit config files as needed
-./bin/setup.sh                    # Shows parameters and asks for confirmation
+./bin/run.sh                    # Shows parameters and asks for confirmation
 ```
 
 **Setup Without Deploy:**
 ```bash
 # Edit config files as needed
-./bin/setup.sh --use-defaults     # Setup only, no deployment
+./bin/run.sh --use-defaults     # Setup only, no deployment
 cd infra && cdk deploy            # Deploy manually later
 ```
 
@@ -163,7 +160,7 @@ You have two options for providing your air quality dataset:
 
 ### Alternative Approaches
 - **Deploy First**: Deploy infrastructure, then add data file and run database initialization Lambda
-- **Custom Filename**: Configure different filename in `pre-deployment-config.ini` during setup
+- **Custom Filename**: Configure different filename in `config.ini` during setup
 
 For detailed format requirements, see `infra/data/README.md` after running setup.
 
@@ -234,8 +231,8 @@ After creating your model using either option:
 
 2. **Update Configuration File**:
    ```bash
-   # Edit the post-deployment config file
-   vim infra/scripts/post-deployment-config.ini
+   # Edit the config file
+   vim infra/scripts/config.ini
    
    # Update the model ID:
    aq_canvas_model_id = your-actual-model-name
@@ -302,10 +299,10 @@ The cleanup script removes:
 ### Common Issues
 
 **Setup Script Issues:**
-- Configuration files must be present in `infra/scripts/` directory
-- The script requires both `pre-deployment-config.ini` and `post-deployment-config.ini` files
-- To modify parameters, edit the configuration files and re-run the script
-- Use `./bin/setup.sh --use-defaults` for non-interactive setup
+- Configuration template must be present in `infra/scripts/` directory
+- The script requires `config.ini.default` file and creates `config.ini` from it
+- To modify parameters, edit the `config.ini` file and re-run the script
+- Use `./bin/run.sh --use-defaults` for non-interactive setup
 
 **CDK Deployment Errors:**
 - Ensure AWS credentials are configured: `aws configure`
@@ -319,14 +316,14 @@ The cleanup script removes:
 
 **Canvas Model Configuration:**
 - Canvas model creation is no longer automatic
-- The setup script uses configuration files with placeholder model IDs
-- Update `infra/scripts/post-deployment-config.ini` with your actual Canvas model ID after creating it
+- The setup script creates `config.ini` from template with placeholder model ID
+- Update `infra/scripts/config.ini` with your actual Canvas model ID after creating it
 - Follow the blog post to create your Canvas model after infrastructure deployment
 
 ### Getting Help
 - Check CloudWatch logs for Lambda function errors
 - Review CDK synthesis output for configuration issues
-- Use `./bin/setup.sh --help` for setup options
+- Use `./bin/run.sh --help` for setup options
 
 ## Architecture Benefits
 

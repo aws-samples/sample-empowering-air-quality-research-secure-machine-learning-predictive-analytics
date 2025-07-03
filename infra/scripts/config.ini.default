@@ -1,0 +1,25 @@
+[defaults]
+# Data Configuration
+initial_data_file = init_data.csv
+project_prefix = demoapp
+aq_parameter_prediction = PM 2.5
+missing_value_pattern_match = [65535]
+
+# Processing Configuration
+batch_transform_schedule_in_hours = 24
+log_level = WARN
+rds_aurora_pg_version = 
+
+# Model Configuration
+# Provide the id of your manually created SageMaker Canvas model
+aq_canvas_model_id = canvas-model-placeholder-update-after-training
+
+# Prediction Configuration
+# Remember to exclude the target value column from the columns_of_impact list
+columns_of_impact = ['timestamp', 'parameter', 'device_id', 'location_id', 'deployment_date']
+
+# Batch Transform Configuration
+batch_transform_instance_type = ml.m5.xlarge
+batch_transform_instance_count = 1
+batch_transform_max_wait_time_in_seconds = 900
+batch_transform_check_interval_in_seconds = 10
