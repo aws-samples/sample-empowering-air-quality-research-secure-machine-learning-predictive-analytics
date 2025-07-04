@@ -62,15 +62,23 @@ class DatabaseStack(NestedStack):
                 version=postgres_version
             ),
             cluster_identifier=f"{project_prefix}-cluster",
-            instances=2,
-            instance_props=rds.InstanceProps(
+            writer=rds.ClusterInstance.provisioned(
+                "writer",
                 instance_type=ec2.InstanceType.of(
                     ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM
                 ),
-                vpc_subnets=ec2.SubnetSelection(
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-                ),
-                vpc=vpc,
+            ),
+            readers=[
+                rds.ClusterInstance.provisioned(
+                    "reader",
+                    instance_type=ec2.InstanceType.of(
+                        ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM
+                    ),
+                )
+            ],
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
             ),
             security_groups=[db_security_group],
             removal_policy=RemovalPolicy.DESTROY,
