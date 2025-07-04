@@ -161,7 +161,7 @@ class StepFunctionsStack(NestedStack):
             payload=sfn.TaskInput.from_json_path_at("$"),
             retry_on_service_exceptions=False,  # Handle errors explicitly
             result_path="$.QueryResult",
-            timeout=Duration.hours(1),  # 1 hour timeout
+            task_timeout=sfn.Timeout.duration(Duration.hours(1)),  # 1 hour timeout
         )
 
         # Create Lambda task for batch transform initiation with callback
@@ -176,7 +176,7 @@ class StepFunctionsStack(NestedStack):
             retry_on_service_exceptions=False,  # Handle errors explicitly
             integration_pattern=sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
             payload_response_only=False,
-            timeout=Duration.hours(1),  # 1 hour timeout
+            task_timeout=sfn.Timeout.duration(Duration.hours(1)),  # 1 hour timeout
         )
 
         # Create Lambda task for writing to DB
@@ -186,7 +186,7 @@ class StepFunctionsStack(NestedStack):
             lambda_function=write_results_function,
             payload=sfn.TaskInput.from_json_path_at("$"),
             retry_on_service_exceptions=False,  # Handle errors explicitly
-            timeout=Duration.hours(1),  # 1 hour timeout
+            task_timeout=sfn.Timeout.duration(Duration.hours(1)),  # 1 hour timeout
         )
 
         # Create terminal states
@@ -259,7 +259,7 @@ class StepFunctionsStack(NestedStack):
         return sfn.StateMachine(
             self,
             f"{project_prefix}StateMachine",
-            definition=definition,
+            definition_body=sfn.DefinitionBody.from_chainable(definition),
             role=state_machine_role,
             tracing_enabled=True,
             timeout=Duration.hours(2),  # Overall state machine timeout of 2 hours

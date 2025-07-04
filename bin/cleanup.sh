@@ -132,8 +132,8 @@ find_and_remove ".npm" "npm cache directories" "d"
 # Clean configuration files (with user confirmation)
 echo -e "${GREEN}⚙️  Cleaning configuration files...${NC}"
 config_files=(
-    "./infra/scripts/pre-deployment-config.ini"
-    "./infra/scripts/post-deployment-config.ini"
+    "./infra/scripts/config.ini"
+    "./infra/scripts/config.ini"
 )
 
 for config_file in "${config_files[@]}"; do

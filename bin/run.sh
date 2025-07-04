@@ -17,12 +17,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Configuration variables to store parameters dynamically
-PRE_DEPLOYMENT_KEYS=()
-PRE_DEPLOYMENT_VALUES=()
-POST_DEPLOYMENT_KEYS=()
-POST_DEPLOYMENT_VALUES=()
-ALL_CONFIG_KEYS=()
-ALL_CONFIG_VALUES=()
+CONFIG_KEYS=()
+CONFIG_VALUES=()
 
 # Parse command line arguments
 USE_DEFAULTS=false
@@ -66,8 +62,8 @@ if [ "$HELP" = true ]; then
     echo
     echo -e "${GREEN}Prerequisites:${NC}"
     echo "  1. Configuration files must be present:"
-    echo "     • infra/scripts/pre-deployment-config.ini"
-    echo "     • infra/scripts/post-deployment-config.ini"
+    echo "     • infra/scripts/config.ini"
+    echo "     • infra/scripts/config.ini"
     echo "  2. Place your data file at: infra/data/[filename].csv"
     echo
     echo -e "${GREEN}Configuration:${NC}"
@@ -99,164 +95,91 @@ fi
 # Helper function to get value by key from arrays
 get_config_value() {
     local key="$1"
-    local array_prefix="$2"  # Either "PRE_DEPLOYMENT" or "POST_DEPLOYMENT" or "ALL_CONFIG"
     
-    # Use case statement to handle different array prefixes
-    case "$array_prefix" in
-        "PRE_DEPLOYMENT")
-            for i in "${!PRE_DEPLOYMENT_KEYS[@]}"; do
-                if [ "${PRE_DEPLOYMENT_KEYS[$i]}" = "$key" ]; then
-                    echo "${PRE_DEPLOYMENT_VALUES[$i]}"
-                    return 0
-                fi
-            done
-            ;;
-        "POST_DEPLOYMENT")
-            for i in "${!POST_DEPLOYMENT_KEYS[@]}"; do
-                if [ "${POST_DEPLOYMENT_KEYS[$i]}" = "$key" ]; then
-                    echo "${POST_DEPLOYMENT_VALUES[$i]}"
-                    return 0
-                fi
-            done
-            ;;
-        "ALL_CONFIG")
-            for i in "${!ALL_CONFIG_KEYS[@]}"; do
-                if [ "${ALL_CONFIG_KEYS[$i]}" = "$key" ]; then
-                    echo "${ALL_CONFIG_VALUES[$i]}"
-                    return 0
-                fi
-            done
-            ;;
-    esac
+    for i in "${!CONFIG_KEYS[@]}"; do
+        if [ "${CONFIG_KEYS[$i]}" = "$key" ]; then
+            echo "${CONFIG_VALUES[$i]}"
+            return 0
+        fi
+    done
     echo ""
 }
 
-# Function to read all parameters from config files dynamically
+# Function to read all parameters from config file dynamically
 read_default_config() {
-    local pre_config_file="$PROJECT_ROOT/infra/scripts/pre-deployment-config.ini"
-    local post_config_file="$PROJECT_ROOT/infra/scripts/post-deployment-config.ini"
+    local config_file="$PROJECT_ROOT/infra/scripts/config.ini"
+    local default_config_file="$PROJECT_ROOT/infra/scripts/config.ini.default"
     
-    # Check if config files exist
-    if [[ ! -f "$pre_config_file" || ! -f "$post_config_file" ]]; then
-        echo -e "${RED}❌ Configuration files not found!${NC}"
-        echo
-        echo -e "${YELLOW}Required configuration files:${NC}"
-        echo -e "  • ${BLUE}$pre_config_file${NC}"
-        echo -e "  • ${BLUE}$post_config_file${NC}"
-        echo
-        echo -e "${RED}These files should be provided by the stack.${NC}"
-        echo -e "${YELLOW}Please ensure the configuration files are present before running setup.${NC}"
-        exit 1
+    # Create config.ini from default if it doesn't exist
+    if [[ ! -f "$config_file" ]]; then
+        if [[ -f "$default_config_file" ]]; then
+            echo "Creating config.ini from default template..."
+            cp "$default_config_file" "$config_file"
+        else
+            echo -e "${RED}❌ Default configuration file not found!${NC}"
+            echo -e "  • ${BLUE}$default_config_file${NC}"
+            exit 1
+        fi
     fi
     
     # Clear existing configurations
-    PRE_DEPLOYMENT_KEYS=()
-    PRE_DEPLOYMENT_VALUES=()
-    POST_DEPLOYMENT_KEYS=()
-    POST_DEPLOYMENT_VALUES=()
-    ALL_CONFIG_KEYS=()
-    ALL_CONFIG_VALUES=()
+    CONFIG_KEYS=()
+    CONFIG_VALUES=()
     
-    # Read pre-deployment config file
-    if [ -f "$pre_config_file" ]; then
-        if [ "$USE_DEFAULTS" = false ]; then
-            echo "Reading pre-deployment configuration from: $pre_config_file" >&2
-        fi
-        while IFS='=' read -r key value; do
-            # Skip empty lines and comments
-            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-            # Skip section headers like [defaults]
-            [[ "$key" =~ ^\[.*\]$ ]] && continue
-            
-            # Clean up key and value (remove leading/trailing whitespace)
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs)
-            
-            if [ -n "$key" ]; then
-                PRE_DEPLOYMENT_KEYS+=("$key")
-                PRE_DEPLOYMENT_VALUES+=("$value")
-                ALL_CONFIG_KEYS+=("$key")
-                ALL_CONFIG_VALUES+=("$value")
-                if [ "$USE_DEFAULTS" = false ]; then
-                    echo "  Pre-deployment: $key = $value" >&2
-                fi
-            fi
-        done < "$pre_config_file"
-    else
-        echo "Warning: Pre-deployment config file not found: $pre_config_file" >&2
+    # Read config file
+    if [ "$USE_DEFAULTS" = false ]; then
+        echo "Reading configuration from: $config_file" >&2
     fi
-    
-    # Read post-deployment config file
-    if [ -f "$post_config_file" ]; then
-        if [ "$USE_DEFAULTS" = false ]; then
-            echo "Reading post-deployment configuration from: $post_config_file" >&2
-        fi
-        while IFS='=' read -r key value; do
-            # Skip empty lines and comments
-            [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
-            # Skip section headers like [defaults]
-            [[ "$key" =~ ^\[.*\]$ ]] && continue
-            
-            # Clean up key and value (remove leading/trailing whitespace)
-            key=$(echo "$key" | xargs)
-            value=$(echo "$value" | xargs)
-            
-            if [ -n "$key" ]; then
-                POST_DEPLOYMENT_KEYS+=("$key")
-                POST_DEPLOYMENT_VALUES+=("$value")
-                ALL_CONFIG_KEYS+=("$key")
-                ALL_CONFIG_VALUES+=("$value")
-                if [ "$USE_DEFAULTS" = false ]; then
-                    echo "  Post-deployment: $key = $value" >&2
-                fi
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [[ -z "$key" || "$key" =~ ^[[:space:]]*# ]] && continue
+        # Skip section headers like [defaults]
+        [[ "$key" =~ ^\[.*\]$ ]] && continue
+        
+        # Clean up key and value (remove leading/trailing whitespace)
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        
+        if [ -n "$key" ]; then
+            CONFIG_KEYS+=("$key")
+            CONFIG_VALUES+=("$value")
+            if [ "$USE_DEFAULTS" = false ]; then
+                echo "  $key = $value" >&2
             fi
-        done < "$post_config_file"
-    else
-        echo "Warning: Post-deployment config file not found: $post_config_file" >&2
-    fi
+        fi
+    done < "$config_file"
     
     if [ "$USE_DEFAULTS" = false ]; then
-        echo "Total parameters loaded: ${#ALL_CONFIG_KEYS[@]}" >&2
+        echo "Total parameters loaded: ${#CONFIG_KEYS[@]}" >&2
     fi
 }
 
 # Function to display configuration and ask for confirmation
 show_config_and_confirm() {
-    echo -e "${GREEN}📋 Default Configuration Parameters${NC}"
+    echo -e "${GREEN}📋 Configuration Parameters${NC}"
     echo "=============================================="
     
-    # Display pre-deployment parameters
-    if [ ${#PRE_DEPLOYMENT_KEYS[@]} -gt 0 ]; then
-        echo -e "${BLUE}Pre-deployment Configuration:${NC}"
-        for i in "${!PRE_DEPLOYMENT_KEYS[@]}"; do
-            echo -e "  ${PRE_DEPLOYMENT_KEYS[$i]}: ${BLUE}${PRE_DEPLOYMENT_VALUES[$i]}${NC}"
+    # Display all parameters
+    if [ ${#CONFIG_KEYS[@]} -gt 0 ]; then
+        echo -e "${BLUE}Configuration:${NC}"
+        for i in "${!CONFIG_KEYS[@]}"; do
+            echo -e "  ${CONFIG_KEYS[$i]}: ${BLUE}${CONFIG_VALUES[$i]}${NC}"
         done
         echo
     fi
     
-    # Display post-deployment parameters
-    if [ ${#POST_DEPLOYMENT_KEYS[@]} -gt 0 ]; then
-        echo -e "${BLUE}Post-deployment Configuration:${NC}"
-        for i in "${!POST_DEPLOYMENT_KEYS[@]}"; do
-            echo -e "  ${POST_DEPLOYMENT_KEYS[$i]}: ${BLUE}${POST_DEPLOYMENT_VALUES[$i]}${NC}"
-        done
-        echo
-    fi
-    
-    if [ ${#ALL_CONFIG_KEYS[@]} -eq 0 ]; then
+    if [ ${#CONFIG_KEYS[@]} -eq 0 ]; then
         echo -e "${RED}❌ No configuration parameters found!${NC}"
-        echo -e "${YELLOW}Please ensure the configuration files exist and contain valid parameters.${NC}"
+        echo -e "${YELLOW}Please ensure the configuration file exists and contains valid parameters.${NC}"
         return 1
     fi
     
-    echo -e "${YELLOW}These are the default parameters that will be used for your deployment.${NC}"
+    echo -e "${YELLOW}These are the parameters that will be used for your deployment.${NC}"
     echo
     echo -e "${BLUE}💡 To modify these parameters:${NC}"
-    echo -e "   1. Edit the configuration files:"
-    echo -e "      • ${YELLOW}infra/scripts/pre-deployment-config.ini${NC} (for basic config)"
-    echo -e "      • ${YELLOW}infra/scripts/post-deployment-config.ini${NC} (for Canvas model)"
-    echo -e "   2. Add new parameters using the format: ${YELLOW}parameter_name = value${NC}"
-    echo -e "   3. Re-run this setup script: ${YELLOW}./bin/setup.sh${NC}"
+    echo -e "   1. Edit the configuration file:"
+    echo -e "      • ${YELLOW}infra/scripts/config.ini${NC}"
+    echo -e "   2. Re-run the script: ${YELLOW}./bin/run.sh${NC}"
     echo
     
     if [ "$USE_DEFAULTS" = true ]; then
@@ -264,16 +187,15 @@ show_config_and_confirm() {
         return 0
     fi
     
-    read -p "Do you want to continue with these default parameters? (Y/n): " -n 1 -r
+    read -p "Do you want to continue with these parameters? (Y/n): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Nn]$ ]]; then
         echo
         echo -e "${YELLOW}Setup cancelled.${NC}"
         echo -e "${BLUE}To modify the parameters:${NC}"
-        echo -e "   1. Edit the configuration files:"
-        echo -e "      • ${YELLOW}infra/scripts/pre-deployment-config.ini${NC}"
-        echo -e "      • ${YELLOW}infra/scripts/post-deployment-config.ini${NC}"
-        echo -e "   2. Re-run: ${YELLOW}./bin/setup.sh${NC}"
+        echo -e "   1. Edit the configuration file:"
+        echo -e "      • ${YELLOW}infra/scripts/config.ini${NC}"
+        echo -e "   2. Re-run: ${YELLOW}./bin/run.sh${NC}"
         echo
         exit 1
     fi
@@ -293,16 +215,16 @@ show_config_and_confirm
 
 # Extract commonly used values for backward compatibility
 # These can be accessed by other parts of the script that expect specific variable names
-PROJECT_PREFIX=$(get_config_value "project_prefix" "ALL_CONFIG")
+PROJECT_PREFIX=$(get_config_value "project_prefix")
 PROJECT_PREFIX=${PROJECT_PREFIX:-demoapp}
 
-DATA_FILE=$(get_config_value "initial_data_file" "ALL_CONFIG")
+DATA_FILE=$(get_config_value "initial_data_file")
 DATA_FILE=${DATA_FILE:-init_data.csv}
 
-AQ_PARAMETER=$(get_config_value "aq_parameter_prediction" "ALL_CONFIG")
+AQ_PARAMETER=$(get_config_value "aq_parameter_prediction")
 AQ_PARAMETER=${AQ_PARAMETER:-"PM 2.5"}
 
-CANVAS_MODEL_ID=$(get_config_value "aq_canvas_model_id" "ALL_CONFIG")
+CANVAS_MODEL_ID=$(get_config_value "aq_canvas_model_id")
 CANVAS_MODEL_ID=${CANVAS_MODEL_ID:-canvas-model-placeholder-update-after-training}
 
 # Convert project prefix to lowercase
@@ -388,19 +310,17 @@ echo "✅ Lambda packages built successfully"
 echo
 echo -e "${GREEN}📝 Step 3: Validating Configuration Files${NC}"
 
-# Check if config files exist and are readable
-PRE_CONFIG_FILE="$PROJECT_ROOT/infra/scripts/pre-deployment-config.ini"
-POST_CONFIG_FILE="$PROJECT_ROOT/infra/scripts/post-deployment-config.ini"
+# Check if config file exists and is readable
+CONFIG_FILE="$PROJECT_ROOT/infra/scripts/config.ini"
 
-if [[ -f "$PRE_CONFIG_FILE" && -f "$POST_CONFIG_FILE" ]]; then
-    echo "✅ Configuration files found:"
-    echo "  • pre-deployment-config.ini"
-    echo "  • post-deployment-config.ini"
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo "✅ Configuration file found:"
+    echo "  • config.ini"
     echo
-    echo "Using configuration from these files."
+    echo "Using configuration from this file."
 else
-    echo -e "${RED}❌ Configuration files missing!${NC}"
-    echo "This should not happen as they were validated earlier."
+    echo -e "${RED}❌ Configuration file missing!${NC}"
+    echo "This should not happen as it was created earlier."
     exit 1
 fi
 
@@ -543,31 +463,33 @@ if [ "$DEPLOY" = true ]; then
 else
     if [ -f "infra/data/$DATA_FILE" ]; then
         echo -e "${GREEN}✅ Ready for deployment:${NC}"
-        echo -e "   1. ${YELLOW}cd infra && cdk deploy${NC}"
-        echo "   2. Initialize database using the Lambda function in AWS Console"
-        echo "   3. Your system will be ready to process air quality data!"
+        echo -e "   1. ${YELLOW}source .venv/bin/activate${NC}"
+        echo -e "   2. ${YELLOW}cd infra && cdk deploy${NC}"
+        echo "   3. Initialize database using the Lambda function in AWS Console"
+        echo "   4. Your system will be ready to process air quality data!"
     else
         echo -e "${YELLOW}📋 Data file options - Choose one approach:${NC}"
         echo
         echo -e "${BLUE}Option 1: Local file approach${NC}"
         echo -e "   1. Add your data file to: ${YELLOW}infra/data/$DATA_FILE${NC}"
         echo "   2. Verify the CSV format matches the required schema"
-        echo -e "   3. Deploy: ${YELLOW}cd infra && cdk deploy${NC}"
-        echo "   4. Run the database initialization Lambda function in AWS Console"
+        echo -e "   3. Activate environment: ${YELLOW}source .venv/bin/activate${NC}"
+        echo -e "   4. Deploy: ${YELLOW}cd infra && cdk deploy${NC}"
+        echo "   5. Run the database initialization Lambda function in AWS Console"
         echo
         echo -e "${BLUE}Option 2: S3 upload approach${NC}"
-        echo -e "   1. Deploy infrastructure first: ${YELLOW}cd infra && cdk deploy${NC}"
-        echo -e "   2. Upload your data file to S3 bucket location: ${YELLOW}initial_dataset/${NC}"
-        echo "   3. Run the database initialization Lambda function in AWS Console"
-        echo "   4. The Lambda will process the file from S3 and populate the database"
+        echo -e "   1. Activate environment: ${YELLOW}source .venv/bin/activate${NC}"
+        echo -e "   2. Deploy infrastructure first: ${YELLOW}cd infra && cdk deploy${NC}"
+        echo -e "   3. Upload your data file to S3 bucket location: ${YELLOW}initial_dataset/${NC}"
+        echo "   4. Run the database initialization Lambda function in AWS Console"
+        echo "   5. The Lambda will process the file from S3 and populate the database"
         echo
         echo -e "${GREEN}💡 Recommendation:${NC} Use Option 2 if you have large data files or prefer S3 storage"
     fi
 fi
 echo
 echo -e "${GREEN}Configuration saved to:${NC}"
-echo "  • $PROJECT_ROOT/infra/scripts/pre-deployment-config.ini"
-echo "  • $PROJECT_ROOT/infra/scripts/post-deployment-config.ini"
+echo "  • $PROJECT_ROOT/infra/scripts/config.ini"
 echo
 echo -e "${GREEN}Lambda packages built in:${NC}"
 echo "  • lambda_layer/common/common_layer.zip"
@@ -582,12 +504,14 @@ echo "  • The database init Lambda will process your data file automatically"
 echo
 if [[ "$CANVAS_MODEL_ID" == *"placeholder"* ]]; then
     echo -e "${YELLOW}📋 Next Steps - Canvas Model Setup:${NC}"
-    echo "  1. Deploy this infrastructure first: cd infra && cdk deploy"
+    echo "  1. Activate environment: source .venv/bin/activate"
+    echo "  2. Deploy this infrastructure first: cd infra && cdk deploy"
     echo "  2. Follow the blog post to create and deploy your Canvas model:"
     echo "     • See the detailed Canvas setup instructions in the blog post"
     echo "     • This covers data preparation, model training, and deployment"
-    echo "  3. Update configuration with your model ID:"
-    echo "     • Run: ./bin/setup.sh (to update model ID)"
+    echo "  4. Update configuration with your model ID:"
+    echo "     • Run: ./bin/run.sh (to update model ID)"
+    echo "     • Activate environment: source .venv/bin/activate"
     echo "     • Re-deploy: cd infra && cdk deploy"
     echo
 fi

@@ -639,7 +639,7 @@ class LambdaStack(NestedStack):
                 "BATCH_CALLBACK_FUNCTION_NAME": f"{config.get('project_prefix', 'demoapp')}-BatchTransformCallback",
                 
                 # New configurable batch transform parameters
-                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("columns_of_impact", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
                 "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
                 "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
                 "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),
@@ -657,7 +657,7 @@ class LambdaStack(NestedStack):
                 "PREDICTED_PREFIX": "predicted_values_output",
                 
                 # Add the same batch transform configuration parameters for consistency
-                "ATTRIBUTES_FOR_PREDICTION": str(config.get("attributes_for_prediction", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
+                "ATTRIBUTES_FOR_PREDICTION": str(config.get("columns_of_impact", "['timestamp', 'parameter', 'sensor_type', 'sensor_id', 'longitude', 'latitude', 'deployment_date']")),
                 "BATCH_TRANSFORM_INSTANCE_TYPE": str(config.get("batch_transform_instance_type", "ml.m5.xlarge")),
                 "BATCH_TRANSFORM_INSTANCE_COUNT": str(config.get("batch_transform_instance_count", "1")),
                 "BATCH_TRANSFORM_MAX_WAIT_TIME_IN_SECONDS": str(config.get("batch_transform_max_wait_time_in_seconds", "900")),

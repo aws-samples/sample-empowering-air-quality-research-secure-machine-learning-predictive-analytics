@@ -227,7 +227,7 @@ Before deployment, verify:
 1. **Database Initialization**: Run the Lambda function to process your data
 2. **Verify Import**: Check CloudWatch logs for successful processing
 3. **Canvas Model**: Create your SageMaker Canvas model (follow blog post instructions)
-4. **Update Configuration**: Edit `infra/scripts/post-deployment-config.ini` with Canvas model ID
+4. **Update Configuration**: Edit `infra/scripts/config.ini` with Canvas model ID
 5. **Re-deploy**: Run `cd infra && cdk deploy` to activate predictions
 6. **System Ready**: Your air quality prediction system is ready to use!
 

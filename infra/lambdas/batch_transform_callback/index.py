@@ -161,6 +161,16 @@ def process_batch_results(job_metadata):
         source_bucket=SOURCE_BUCKET
     )
     
+    # Ensure all original columns are preserved
+    if original_data_columns:
+        missing_cols = set(original_data_columns) - set(result_df.columns)
+        if missing_cols:
+            logger.warning(f"Missing columns in result: {missing_cols}")
+        # Reorder columns to match original order plus predictions
+        available_original_cols = [col for col in original_data_columns if col in result_df.columns]
+        prediction_cols = [col for col in result_df.columns if col not in original_data_columns]
+        result_df = result_df[available_original_cols + prediction_cols]
+    
     if result_df is None or result_df.empty:
         raise Exception("Failed to process batch transform results")
     
