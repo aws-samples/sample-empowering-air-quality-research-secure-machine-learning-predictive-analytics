@@ -5,6 +5,9 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_sagemaker as sagemaker,
     CfnOutput,
+    CfnParameter,
+    CfnCondition,
+    Fn,
 )
 from constructs import Construct
 from cdk_nag import NagSuppressions
@@ -25,6 +28,12 @@ class SageMakerStack(NestedStack):
 
         # Get the project prefix from config
         project_prefix = config.get("project_prefix", "demoapp")
+
+        # Get Canvas model parameters from config using the new parameter names
+        create_from_canvas_str = config.get("create_from_canvas", "false").lower()
+        create_from_canvas = create_from_canvas_str in ('true', 'yes', '1', 'y')
+        canvas_model_package_group_name = config.get("canvas_model_package_group_name", "")
+        canvas_model_version = config.get("canvas_model_version", "1")
 
         # Create SageMaker execution role
         self.sagemaker_execution_role = iam.Role(
@@ -100,6 +109,51 @@ class SageMakerStack(NestedStack):
             ),
         )
 
+        # Create a condition for Canvas model creation
+        # We'll use a CfnCondition with a custom expression that evaluates to true/false
+        canvas_condition = CfnCondition(
+            self,
+            f"{project_prefix}CanvasModelCondition",
+            expression=Fn.condition_equals(Fn.ref("AWS::Region"), Fn.ref("AWS::Region"))  # Always true
+        )
+        
+        # If create_from_canvas is False, we need to invert the condition
+        if not create_from_canvas:
+            canvas_condition = CfnCondition(
+                self,
+                f"{project_prefix}NoCanvasModelCondition",
+                expression=Fn.condition_equals("false", "true")  # Always false
+            )
+
+        # Only create the Canvas model if create_from_canvas is True and we have a valid model name
+        if create_from_canvas and canvas_model_package_group_name and canvas_model_package_group_name != "placeholder-update-after-model-training":
+            # Create SageMaker model from Canvas model
+            self.canvas_model = sagemaker.CfnModel(
+                self,
+                f"{project_prefix}SageMakerCanvasModel",
+                execution_role_arn=self.sagemaker_execution_role.role_arn,
+                primary_container=sagemaker.CfnModel.ContainerDefinitionProperty(
+                    model_package_name=f"arn:aws:sagemaker:{self.region}:{self.account}:model-package/{canvas_model_package_group_name}/{canvas_model_version}"
+                ),
+                model_name=f"{project_prefix}-canvas-model",
+                vpc_config=sagemaker.CfnModel.VpcConfigProperty(
+                    security_group_ids=[self.sagemaker_security_group.security_group_id],
+                    subnets=[subnet.subnet_id for subnet in vpc.isolated_subnets]
+                )
+            )
+            
+            # Only create the Canvas model if the condition is true
+            self.canvas_model.cfn_options.condition = canvas_condition
+            
+            # Conditional output for the Canvas model ARN
+            canvas_model_output = CfnOutput(
+                self,
+                f"{project_prefix}CanvasModelName",
+                value=self.canvas_model.attr_model_name,
+                description="SageMaker Canvas Model Name",
+            )
+            canvas_model_output.condition = canvas_condition
+        
         # Outputs with prefix
         CfnOutput(
             self,
@@ -128,6 +182,15 @@ class SageMakerStack(NestedStack):
             value=self.space_execution_role.role_arn,
             description="Space Execution Role ARN",
         )
+
+        # Add a message output for when the model is not created
+        if not create_from_canvas or not canvas_model_package_group_name or canvas_model_package_group_name == "placeholder-update-after-model-training":
+            no_model_message = CfnOutput(
+                self,
+                f"{project_prefix}CanvasModelStatus",
+                value="Canvas model creation skipped - either create_from_canvas is false or using placeholder model name",
+                description="Canvas Model Status",
+            )
 
         # Add CDK nag suppressions for this stack
         NagSuppressions.add_resource_suppressions(

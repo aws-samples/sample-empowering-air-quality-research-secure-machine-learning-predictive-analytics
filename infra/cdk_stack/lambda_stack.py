@@ -155,12 +155,17 @@ class LambdaStack(NestedStack):
         self.batch_initiate_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    "sagemaker:CreateTransformJob",
                     "sagemaker:DescribeModel",
-                    "sagemaker:DescribeTransformJob"
+                    "sagemaker:InvokeEndpoint",
+                    "sagemaker:CreateTransformJob",
+                    "sagemaker:DescribeTransformJob",
+                    "sagemaker:StopTransformJob",
+                    "sagemaker:ListTags",
+                    "sagemaker:AddTags"
                 ],
                 resources=[
-                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{config.get('aq_canvas_model_id')}",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{project_prefix}-canvas-model",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{project_prefix}-batch-transform-model",
                     f"arn:aws:sagemaker:{self.region}:{self.account}:transform-job/*"
                 ]
             )
@@ -635,7 +640,7 @@ class LambdaStack(NestedStack):
                 "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "initiate_batch_transform_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
-                "CANVAS_MODEL_ID": str(config.get("aq_canvas_model_id", "")),  # Updated to use aq_canvas_model_id
+                "SAGEMAKER_MODEL_ID": f"{config.get('project_prefix', 'demoapp')}-canvas-model",
                 "BATCH_CALLBACK_FUNCTION_NAME": f"{config.get('project_prefix', 'demoapp')}-BatchTransformCallback",
                 
                 # New configurable batch transform parameters

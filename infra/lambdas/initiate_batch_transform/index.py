@@ -11,7 +11,7 @@ import boto3
 REGION = get_env("AWS_REGION", "us-east-1")
 LOG_LEVEL = get_env("LOG_LEVEL", "DEBUG")
 SERVICE_NAME = get_env("SERVICE_NAME", "initiate_batch_transform_lambda")
-CANVAS_MODEL_ID = get_env("CANVAS_MODEL_ID", "")
+SAGEMAKER_MODEL_ID = get_env("SAGEMAKER_MODEL_ID", "")
 SOURCE_BUCKET = get_env("SOURCE_BUCKET")
 
 logger = get_logger(service=SERVICE_NAME, level=LOG_LEVEL)
@@ -41,18 +41,18 @@ def lambda_handler(event, context):
             logger.error(f"Failed to send failure callback: {str(callback_error)}")
         return error_response
 
-    # Validate Canvas model ID is configured
-    model_id = CANVAS_MODEL_ID
+    # Validate SageMaker model ID is configured
+    model_id = SAGEMAKER_MODEL_ID
     if not model_id:
-        logger.error("Canvas model ID not configured")
-        error_response = {"statusCode": 500, "body": {"message": "Canvas model ID not configured. Please run post-deployment configuration."}}
+        logger.error("SageMaker model ID not configured")
+        error_response = {"statusCode": 500, "body": {"message": "SageMaker model ID not configured. Please run post-deployment configuration."}}
         # Send failure callback to Step Functions
         try:
             stepfunctions_client = boto3.client('stepfunctions')
             stepfunctions_client.send_task_failure(
                 taskToken=task_token,
-                error="MissingCanvasModelId",
-                cause="Canvas model ID not configured in environment variables"
+                error="MissingSageMakerModelId",
+                cause="SageMaker model ID not configured in environment variables"
             )
         except Exception as callback_error:
             logger.error(f"Failed to send failure callback: {str(callback_error)}")
