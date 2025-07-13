@@ -134,7 +134,21 @@ class LambdaStack(NestedStack):
         )
 
         # Permissions for InitiateBatchTransform Lambda
-        # S3 permissions for reading input data and writing batch input files
+        # S3 read permissions for reading input data
+        self.batch_initiate_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                resources=[
+                    source_bucket.bucket_arn,
+                    f"{source_bucket.bucket_arn}/retrieved_from_db/*"  # Read input data
+                ]
+            )
+        )
+
+        # S3 write permissions for writing batch input files
         self.batch_initiate_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -145,8 +159,7 @@ class LambdaStack(NestedStack):
                 ],
                 resources=[
                     source_bucket.bucket_arn,
-                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",  # Read input data
-                    f"{source_bucket.bucket_arn}/input_batch/*",       # Write batch input
+                    f"{source_bucket.bucket_arn}/input_batch/*"       # Write batch input
                 ]
             )
         )
@@ -195,7 +208,22 @@ class LambdaStack(NestedStack):
         )
 
         # Permissions for BatchTransformCallback Lambda
-        # S3 permissions for reading batch results and writing final output
+        # S3 read permissions for reading batch results and original input
+        self.batch_callback_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                resources=[
+                    source_bucket.bucket_arn,
+                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",  # Read original input data
+                    f"{source_bucket.bucket_arn}/output_batch/*"          # Read batch results
+                ]
+            )
+        )
+
+        # S3 write permissions for writing final output
         self.batch_callback_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -206,8 +234,6 @@ class LambdaStack(NestedStack):
                 ],
                 resources=[
                     source_bucket.bucket_arn,
-                    f"{source_bucket.bucket_arn}/input_batch/*",           # Read original input
-                    f"{source_bucket.bucket_arn}/output_batch/*",          # Read batch results
                     f"{source_bucket.bucket_arn}/predicted_values_output/*" # Write final output
                 ]
             )
