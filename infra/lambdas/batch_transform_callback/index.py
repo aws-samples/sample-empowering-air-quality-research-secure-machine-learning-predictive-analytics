@@ -141,13 +141,12 @@ def process_batch_results(job_metadata):
     output_batch_prefix = job_metadata['output_batch_prefix']
     batch_job_id = job_metadata['batch_job_id']
     timestamp = job_metadata['timestamp']
-    original_data_columns = job_metadata.get('original_data_columns', [])
+    original_file_key = job_metadata.get('original_file_key')
     
     logger.info(f"Processing results for job: {batch_job_name}")
     
     # Get the original input data
-    input_s3_key = job_metadata['input_s3_key']
-    original_df = S3Helper.read_csv_from_s3(SOURCE_BUCKET, input_s3_key, REGION)
+    original_df = S3Helper.read_csv_from_s3(SOURCE_BUCKET, original_file_key, REGION)
     
     if original_df is None or original_df.empty:
         raise Exception("Failed to read original input data")
@@ -160,6 +159,9 @@ def process_batch_results(job_metadata):
         output_file_name=f"{batch_job_id}_{timestamp}.csv.out",
         source_bucket=SOURCE_BUCKET
     )
+
+    # Get original_data_columns from job_metadata with a default empty list if not present
+    original_data_columns = job_metadata.get('original_data_columns', [])
     
     # Ensure all original columns are preserved
     if original_data_columns:

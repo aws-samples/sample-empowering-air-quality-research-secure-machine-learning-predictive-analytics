@@ -224,8 +224,11 @@ DATA_FILE=${DATA_FILE:-init_data.csv}
 AQ_PARAMETER=$(get_config_value "aq_parameter_prediction")
 AQ_PARAMETER=${AQ_PARAMETER:-"PM 2.5"}
 
-CANVAS_MODEL_ID=$(get_config_value "aq_canvas_model_id")
-CANVAS_MODEL_ID=${CANVAS_MODEL_ID:-canvas-model-placeholder-update-after-training}
+CANVAS_MODEL_PACKAGE_GROUP_NAME=$(get_config_value "canvas_model_package_group_name")
+CANVAS_MODEL_PACKAGE_GROUP_NAME=${CANVAS_MODEL_PACKAGE_GROUP_NAME:-placeholder-update-after-model-training}
+
+CANVAS_MODEL_VERSION=$(get_config_value "canvas_model_version")
+CANVAS_MODEL_VERSION=${CANVAS_MODEL_VERSION:-1}
 
 # Convert project prefix to lowercase
 PROJECT_PREFIX=$(echo "$PROJECT_PREFIX" | tr '[:upper:]' '[:lower:]')

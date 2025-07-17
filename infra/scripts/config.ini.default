@@ -10,9 +10,10 @@ batch_transform_schedule_in_hours = 24
 log_level = WARN
 rds_aurora_pg_version = 
 
-# Model Configuration
-# Provide the id of your manually created SageMaker Canvas model
-aq_canvas_model_id = canvas-model-placeholder-update-after-training
+# SageMaker Model Creation Parameters
+create_from_canvas = false
+canvas_model_package_group_name = placeholder-update-after-model-training
+canvas_model_version = 1
 
 # Prediction Configuration
 # Remember to exclude the target value column from the columns_of_impact list

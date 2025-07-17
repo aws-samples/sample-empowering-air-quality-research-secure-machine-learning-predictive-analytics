@@ -134,7 +134,21 @@ class LambdaStack(NestedStack):
         )
 
         # Permissions for InitiateBatchTransform Lambda
-        # S3 permissions for reading input data and writing batch input files
+        # S3 read permissions for reading input data
+        self.batch_initiate_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                resources=[
+                    source_bucket.bucket_arn,
+                    f"{source_bucket.bucket_arn}/retrieved_from_db/*"  # Read input data
+                ]
+            )
+        )
+
+        # S3 write permissions for writing batch input files
         self.batch_initiate_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -145,8 +159,7 @@ class LambdaStack(NestedStack):
                 ],
                 resources=[
                     source_bucket.bucket_arn,
-                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",  # Read input data
-                    f"{source_bucket.bucket_arn}/input_batch/*",       # Write batch input
+                    f"{source_bucket.bucket_arn}/input_batch/*"       # Write batch input
                 ]
             )
         )
@@ -155,12 +168,17 @@ class LambdaStack(NestedStack):
         self.batch_initiate_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    "sagemaker:CreateTransformJob",
                     "sagemaker:DescribeModel",
-                    "sagemaker:DescribeTransformJob"
+                    "sagemaker:InvokeEndpoint",
+                    "sagemaker:CreateTransformJob",
+                    "sagemaker:DescribeTransformJob",
+                    "sagemaker:StopTransformJob",
+                    "sagemaker:ListTags",
+                    "sagemaker:AddTags"
                 ],
                 resources=[
-                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{config.get('aq_canvas_model_id')}",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{project_prefix}-canvas-model",
+                    f"arn:aws:sagemaker:{self.region}:{self.account}:model/{project_prefix}-batch-transform-model",
                     f"arn:aws:sagemaker:{self.region}:{self.account}:transform-job/*"
                 ]
             )
@@ -190,7 +208,22 @@ class LambdaStack(NestedStack):
         )
 
         # Permissions for BatchTransformCallback Lambda
-        # S3 permissions for reading batch results and writing final output
+        # S3 read permissions for reading batch results and original input
+        self.batch_callback_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                ],
+                resources=[
+                    source_bucket.bucket_arn,
+                    f"{source_bucket.bucket_arn}/retrieved_from_db/*",  # Read original input data
+                    f"{source_bucket.bucket_arn}/output_batch/*"          # Read batch results
+                ]
+            )
+        )
+
+        # S3 write permissions for writing final output
         self.batch_callback_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -201,8 +234,6 @@ class LambdaStack(NestedStack):
                 ],
                 resources=[
                     source_bucket.bucket_arn,
-                    f"{source_bucket.bucket_arn}/input_batch/*",           # Read original input
-                    f"{source_bucket.bucket_arn}/output_batch/*",          # Read batch results
                     f"{source_bucket.bucket_arn}/predicted_values_output/*" # Write final output
                 ]
             )
@@ -635,7 +666,7 @@ class LambdaStack(NestedStack):
                 "LOG_LEVEL": str(config.get("log_level", "INFO")).upper(),
                 "SERVICE_NAME": "initiate_batch_transform_lambda",
                 "PREDICTED_PREFIX": "predicted_values_output",
-                "CANVAS_MODEL_ID": str(config.get("aq_canvas_model_id", "")),  # Updated to use aq_canvas_model_id
+                "SAGEMAKER_MODEL_ID": f"{config.get('project_prefix', 'demoapp')}-canvas-model",
                 "BATCH_CALLBACK_FUNCTION_NAME": f"{config.get('project_prefix', 'demoapp')}-BatchTransformCallback",
                 
                 # New configurable batch transform parameters
