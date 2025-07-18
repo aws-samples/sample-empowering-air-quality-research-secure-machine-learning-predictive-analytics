@@ -1,8 +1,8 @@
-# ANYCompany Air Quality Monitoring System
+# ANYCompany Air Quality ML-Driven Predictive Analytics
 
 ## Overview
-This project implements a comprehensive air quality monitoring and prediction system leveraging AWS services. The solution includes:
-- Data processing orchestration that runs every 24 hour
+This project implements a comprehensive air quality data imputation solution leveraging AWS services. The solution includes:
+- Data imputation orchestration that runs every 24 hours
 - Machine learning-based prediction system
 - Scalable database architecture for sensor data management
 - Automated deployment infrastructure
@@ -12,12 +12,15 @@ This project implements a comprehensive air quality monitoring and prediction sy
 
 ## System Architecture
 
-The solution implements a comprehensive serverless architecture for air quality monitoring and prediction. 
+The solution implements a comprehensive serverless architecture for air quality data imputation. 
 
 ### Architecture Documentation
-- **[Architecture Diagram](ARCHITECTURE_DIAGRAM.md)** - Comprehensive technical documentation with interactive Mermaid diagrams
+- **[Architecture Overview](Architecture.png)** - Quick reference with system overview
+
+![Architecture Overview](Architecture.png)
+
+
 - **[Flow Diagram](FlowDiagram.png)** - Visual workflow representation showing data flow and process steps
-- **[Architecture Overview](architecture_diagram.md)** - Quick reference with system overview
 
 ![Flow Diagram](FlowDiagram.png)
 
@@ -36,7 +39,7 @@ The solution implements a comprehensive serverless architecture for air quality 
 - **AWS Systems Manager Parameter Store** for job metadata and configuration
 
 ### Key Architectural Features:
-- **Configurable Parameter Selection**: Choose between PM 2.5, PM 10, PM 1, Temperature, Humidity, etc. for targeted predictions
+- **Configurable Parameter Selection**: Defaults to PM 2.5. You can also specify your desired parameter such as PM 10, PM 1, Temperature, Humidity, etc. for targeted predictions
 - **Serverless Design**: Scales automatically based on demand, cost-effective
 - **Batch Processing**: Efficient handling of large datasets through SageMaker Batch Transform
 - **Fault Tolerance**: Built-in retry logic and error handling via Step Functions
@@ -46,9 +49,7 @@ The solution implements a comprehensive serverless architecture for air quality 
 ## Prerequisites
 
 ### AWS Requirements
-- Active AWS account with administrative privileges
-- Appropriate IAM permissions for service deployment
-- Selected AWS region for deployment
+- Active AWS account with sufficient IAM permissions for solution deployment
 
 ### Local Development Environment
 - AWS CLI (configured with appropriate credentials)
@@ -57,7 +58,7 @@ The solution implements a comprehensive serverless architecture for air quality 
 - Git
 
 ### Data Requirements
-The system expects air quality data in CSV format with the following fields (order flexible):
+The system expects air quality dataset in CSV format with the following fields (order flexible):
 
 ```
 timestamp,value,parameter,device_id,chip_id,sensor_type,sensor_id,location_id,location,street_name,city,country,latitude,longitude,deployment_date
@@ -65,7 +66,7 @@ timestamp,value,parameter,device_id,chip_id,sensor_type,sensor_id,location_id,lo
 
 **Important Notes:**
 - Column order is flexible - headers are used to identify fields
-- Parameter field can contain any measurement type (PM 2.5, Temperature, Humidity, etc.)
+- Parameter field contains air qualtiy metric (For example: PM 2.5, Temperature, Humidity, etc.)
 - Timestamps must include timezone information
 - GPS coordinates should be in decimal degrees format
 
@@ -76,15 +77,7 @@ Example Record:
 
 ## Installation Guide
 
-### Prerequisites Check
-
-Before starting, ensure you have:
-- AWS CLI configured with appropriate credentials
-- Python 3.10+
-- AWS CDK for Python
-- Your air quality data in CSV format
-
-### Simple Setup (Recommended)
+### Setup
 
 **Step 1: Clone Repository**
 ```bash
@@ -93,53 +86,48 @@ git clone https://github.com/aws-samples/sample-empowering-air-quality-research-
 cd sample-empowering-air-quality-research-secure-machine-learning-predictive-analytics
 ```
 
-**Step 2: Customize Configuration (Optional)**
-```bash
-# Edit configuration settings (created from template on first run)
-vim infra/scripts/config.ini
-```
-
-**Step 3: Add Your Data**
+**Step 2: Add Your Data**
 ```bash
 # Place your CSV file (update filename in config if different)
 cp your-data.csv infra/data/init_data.csv
 ```
 
-**Step 4: Deploy**
+**Step 3: Setup Local Environment**
 ```bash
-# Setup and deploy in one command
-./bin/run.sh --use-defaults --deploy
+# Setup your python virtual environment and create initial config.ini
+./bin/run.sh                    # Shows parameters and asks for confirmation
 ```
 
-**Configuration File:**
+**Step 4: Customize Configuration (Optional)**
 The setup uses a configuration template that is provided with the stack:
 - `infra/scripts/config.ini.default` (template with all settings)
 - `infra/scripts/config.ini` (created from template on first run)
 
 Edit the config.ini file as needed to customize your deployment.
 
-### Alternative Setup Options
+**Note - since this is your initial cdk deploy make sure that `create_from_canvas = false` as you do not have the SageMaker Canvas model yet**
 
-**Interactive Setup:**
 ```bash
-# Edit config files as needed
-./bin/run.sh                    # Shows parameters and asks for confirmation
+# Edit configuration settings (created from template on first run)
+vim infra/scripts/config.ini
 ```
 
-**Setup Without Deploy:**
-```bash
-# Edit config files as needed
-./bin/run.sh --use-defaults     # Setup only, no deployment
-cd infra && cdk deploy            # Deploy manually later
-```
-
-The script automatically:
+The run.sh script automatically:
 - Sets up Python environment and dependencies
 - Builds Lambda layer packages
 - Bootstraps CDK and synthesizes templates
 - Optionally deploys infrastructure (with `--deploy` flag)
 
-**Note:** Canvas model discovery is no longer automatic. You'll need to update the Canvas model ID in your configuration file after creating your model following the blog post instructions.
+**Step 5: Activate Python Virtual Environment**
+```bash
+# Ensure you are at the root directory
+source .venv/bin/activate
+```
+
+**Step 6: Initial CDK Deploy**
+```bash
+cd infra && cdk deploy
+```
 
 ## Data File Setup
 
