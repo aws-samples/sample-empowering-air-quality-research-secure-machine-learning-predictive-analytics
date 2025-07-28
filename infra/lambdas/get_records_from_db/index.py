@@ -18,6 +18,7 @@ DB_NAME = get_env("DB_NAME")
 RDS_DB_PORT = int(get_env("RDS_DB_PORT", "5432"))
 AQ_PARAMETER_PREDICTION = get_env("AQ_PARAMETER_PREDICTION", "PM 2.5")
 MISSING_VALUE_PATTERN_MATCH = get_env("MISSING_VALUE_PATTERN_MATCH", "[65535]")
+DURATION_HOURS = int(get_env("DURATION_HOURS", "24"))
 
 logger = get_logger(service=SERVICE_NAME, level=LOG_LEVEL)
 
@@ -54,6 +55,9 @@ def lambda_handler(event, context):
     missing_values = get_missing_value_patterns()
     logger.info(f"Using missing value patterns: {missing_values}")
     
+    # Use the DURATION_HOURS environment variable
+    logger.info(f"Using duration of {DURATION_HOURS} hours for data retrieval")
+    
     try:
         # Set up RDS configuration for IAM authentication
         rds_config = {
@@ -69,13 +73,13 @@ def lambda_handler(event, context):
         conn = RDSHelper.get_connection_with_iam(rds_config)
         logger.info("Successfully established connection using IAM authentication")
 
-        # Calculate timestamp for 24 hours ago in UTC
+        # Calculate timestamp for specified hours ago in UTC
         # Using timezone-aware datetime
-        twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+        lookback_timestamp = datetime.now(timezone.utc) - timedelta(hours=DURATION_HOURS)
         
         # Format the timestamp for PostgreSQL with timezone information
-        timestamp_str = twenty_four_hours_ago.strftime("%Y-%m-%d %H:%M:%S %z")
-        logger.info(f"Filtering for records newer than: {timestamp_str}")
+        timestamp_str = lookback_timestamp.strftime("%Y-%m-%d %H:%M:%S %z")
+        logger.info(f"Filtering for records newer than: {timestamp_str} ({DURATION_HOURS} hours ago)")
         
         # Use parameterized query with table name as a parameter
         # Look for timestamp or created_at column for time filtering
@@ -135,7 +139,7 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 204,  # Changed from 200 to 204 (No Content)
                 "body": {
-                    "message": f"No records found in the last 24 hours with values {missing_values} and parameter '{AQ_PARAMETER_PREDICTION}'",
+                    "message": f"No records found in the last {DURATION_HOURS} hours with values {missing_values} and parameter '{AQ_PARAMETER_PREDICTION}'",
                     "records": 0,
                     "file_name": None,
                 },
@@ -155,7 +159,7 @@ def lambda_handler(event, context):
                 "statusCode": 200,
                 "headers": {"Content-Type": "application/json"},
                 "body": {
-                    "message": f"Query executed successfully. Found {len(records)} records from the last 24 hours with values {missing_values} and parameter '{AQ_PARAMETER_PREDICTION}'",
+                    "message": f"Query executed successfully. Found {len(records)} records from the last {DURATION_HOURS} hours with values {missing_values} and parameter '{AQ_PARAMETER_PREDICTION}'",
                     "records": len(records),
                     "file_name": file_name,
                 },

@@ -641,6 +641,7 @@ class LambdaStack(NestedStack):
                 "AWS_ACCOUNT_ID": self.account,
                 "AQ_PARAMETER_PREDICTION": str(config.get("aq_parameter_prediction", "PM 2.5")),
                 "MISSING_VALUE_PATTERN_MATCH": str(config.get("missing_value_pattern_match", "[65535]")),
+                "DURATION_HOURS": str(config.get("batch_transform_schedule_in_hours", "24")),
             }
         )
         return env_vars

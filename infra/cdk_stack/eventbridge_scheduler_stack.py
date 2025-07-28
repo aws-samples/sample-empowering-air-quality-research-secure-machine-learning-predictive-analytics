@@ -7,7 +7,7 @@ from aws_cdk import (
 )
 from constructs import Construct
 import json
-from ..utils.schedule_utils import get_schedule_from_config
+from utils.schedule_utils import get_schedule_from_config
 
 class EventBridgeSchedulerStack(NestedStack):
 
