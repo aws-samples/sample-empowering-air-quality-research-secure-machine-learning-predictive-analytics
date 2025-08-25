@@ -189,31 +189,25 @@ At this time, review your remaining config.ini settings and adjust as needed bef
 
 ## Cleanup
 
-### AWS Resources
-To prevent ongoing charges, clean up AWS resources through the console or CLI.
+### Complete the following steps to clean up your resources
 
-### Local Environment
-Clean up generated files and temporary artifacts:
+1. **SageMaker Canvas application cleanup:**
+- On the go to the SageMaker AI console and select the domain that was created under Admin Configurations, and Domains
+- Select the user created under User Profiles for that domain 
+- On the User Details page, navigate to Spaces and Apps, and choose Delete to manually delete your Sagemaker AI canvas application and clean up resources 
 
-```bash
-# Comprehensive cleanup of generated files
-./bin/cleanup.sh
-```
+2. **SageMaker Domain EFS storage cleanup:**
+- Open Amazon EFS and in File systems, delete filesystem tagged as ManagedByAmazonSageMakerResource 
+- Open VPC and under Security, navigate to Security groups 
+- On Security groups, select `security-group-for-inbound-nfs-<your-sagemaker-domain-id>` and delete all Inbound rules associated with that group
+- On Security groups, select `security-group-for-outbound-nfs-<your-sagemaker-domain-id>` and delete all associated Outbound rules
+- Finally, delete both the security groups: `security-group-for-inbound-nfs-<your-sagemaker-domain-id>` and `security-group-for-outbound-nfs-<your-sagemaker-domain-id>`
 
-The cleanup script removes:
-- Python cache files and compiled bytecode
-- CDK generated files and build artifacts  
-- Lambda layer packages and zip files
-- Build and distribution directories
-- Log files and temporary files
-- IDE and editor configuration files
-- AWS deployment artifacts
-- Test artifacts and coverage files
-
-**Interactive Options:**
-- Configuration files (asks for confirmation)
-- Virtual environment (asks for confirmation)  
-- Data files (asks for confirmation)
+3. **Use the AWS CDK to clean up the remaining AWS resources:**
+- After the preceding steps are complete, return to your local desktop environment where the GitHub repo was cloned, and change to the project’s infra directory: `$ cd <BASE_PROJECT_FOLDER>/infra` 
+- Destroy the resources created with AWS CloudFormation using the AWS CDK: `$ cdk destroy` 
+- Monitor the AWS CDK process deleting resources created by the solution
+- If there are any errors, troubleshoot using the CloudFormation console and then retry deletion
 
 ## Troubleshooting
 
