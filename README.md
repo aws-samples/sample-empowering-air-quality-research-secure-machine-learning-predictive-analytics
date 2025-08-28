@@ -7,6 +7,8 @@ This project implements a comprehensive air quality data imputation solution lev
 - Scalable database architecture for sensor data management
 - Automated deployment infrastructure
 
+You can find the related blogpost to this repository here: [Empowering air quality research with secure, ML-driven predictive analytics](https://aws.amazon.com/blogs/machine-learning/empowering-air-quality-research-with-secure-ml-driven-predictive-analytics/)
+
 > [!IMPORTANT]
 > **_This solution is intended for experimental purposes and should not be used in production environments. Deployment will incur AWS service costs. Please follow the cleanup instructions when the resources are no longer needed._**
 
